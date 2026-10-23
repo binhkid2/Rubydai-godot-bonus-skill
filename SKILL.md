@@ -11,7 +11,7 @@ description: Hard-won checklist for Godot 4 games that ship to phones (iOS/Andro
 |---|---|
 | Any ScrollContainer, list, sheet, popup, backdrop, drag, swipe, pinch, text field / on-screen keyboard, or "tap does nothing / fires twice" | `references/touch-input.md` |
 | Building Controls in code, layout looks collapsed/off-screen, tweens or `await` misbehave, 3D looks pale, text shows boxes, imported assets look wrong | `references/silent-bugs-checklist.md` |
-| Export to iPhone/iPad, "No presets found", signing, installing/launching on a device, device heat | `references/ios-export.md` |
+| Export to iPhone/iPad, "No presets found", signing, installing/launching on a device, device heat, AdMob / tracking (ATT) prompt for App Review | `references/ios-export.md` |
 | Before saying something works: tests, simulated touch, screenshots, level/content validators, profiling | `references/testing.md` |
 | A panel/sheet suddenly wider than the screen, HUD text running into other text, "nan"/"9223372036854775807" on screen, before any release | `references/silent-bugs-checklist.md` §1.9–1.10, §5 and `references/testing.md` §2a–2b |
 | Testing UI at phone/tablet sizes, App Store screenshots, or tempted to use the iOS Simulator | `references/testing.md` §5 |
@@ -54,6 +54,7 @@ Templates (copy into the project, adapt names):
 **Export and devices**
 - No `export_presets.cfg` means the Export dialog shows "No presets found": create the preset (team ID, bundle ID) before telling the user how to deploy; reload the project if the editor was open.
 - Export from the CLI and install with `xcrun devicectl` to prove the build works before handing it over (`references/ios-export.md`).
+- A game with ads asks App Tracking Transparency at the first launch, about a second after it's on screen and in front (asked during startup, iOS silently drops the prompt; asked later, after a tutorial or the first ad, App Review never sees it and rejects the app). Ads can still be offered later (`references/ios-export.md` §4.1).
 
 **Where to test (no iOS Simulator)**
 - Never use or build anything for the iOS Simulator for a Godot game: the official template's simulator slice is x86_64-only, native plugins are device-only, and a self-built simulator engine runs OpenGL ES on the CPU (minutes per frame in 3D). The owner considers it over-engineering.

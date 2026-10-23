@@ -81,11 +81,26 @@ xcrun devicectl device copy to --device <UDID> --domain-type appDataContainer --
 
 `user://` trên iOS là thư mục `Documents/` của app. Đọc log `print()` của app: `xcrun devicectl device process launch --console --terminate-existing --device <UDID> <bundle.id>` (chạy nền rồi dừng sau vài chục giây).
 
+### 4.1 Hỏi quyền theo dõi quảng cáo (ATT) với AdMob: hỏi ngay lần mở đầu, nhưng đợi app active
+
+**Lỗi bị App Review từ chối:** game có AdMob mà hộp thoại App Tracking Transparency ("Allow … to track your activity…") không hiện khi mở app lần đầu. Reviewer chỉ mở app vài phút; nếu game đợi tới lúc nào đó mới hỏi (sau phần hướng dẫn, khi có quảng cáo đầu tiên…) thì reviewer không bao giờ thấy và từ chối với lý do không tìm thấy yêu cầu ATT. Chủ dự án đã bị từ chối vì đúng lỗi này với một app khác (Capacitor).
+
+**Cái bẫy thứ hai:** gọi `requestTrackingAuthorization` quá sớm, lúc app chưa ở trạng thái active (đang khởi động, ngay trong `_ready()` của màn đầu), thì iOS **lặng lẽ bỏ qua** hộp thoại: không hiện gì, trạng thái vẫn "chưa quyết định". App kia bị từ chối thêm một lần vì lỗi này, dù code đã gọi hỏi từ lúc mở.
+
+**Cách làm đúng:**
+- Hỏi ATT (rồi mới khởi động SDK quảng cáo) ở **lần mở đầu tiên**, khi game đã hiện trên màn hình và ở phía trước được khoảng 1 giây. Việc *mời xem quảng cáo* vẫn có thể để sau phần hướng dẫn; chỉ riêng câu hỏi ATT phải đến sớm.
+- Đếm thời gian "ở phía trước" trong `_process` và đặt lại khi nhận `NOTIFICATION_APPLICATION_PAUSED` / `FOCUS_OUT`; chỉ hỏi khi đếm đủ. Lần mở sau iOS tự trả lời theo lựa chọn cũ, không hiện lại.
+- Câu mô tả quyền `NSUserTrackingUsageDescription` phải có trong Info.plist (plugin AdMob của Godot thêm qua `att_text` trong cấu hình export của nó). Thiếu câu này thì app crash khi hỏi.
+- Privacy manifest (`PrivacyInfo.xcprivacy`) của chính app: `NSPrivacyTracking = false` và **không** có khoá `NSPrivacyTrackingDomains`. Để `true` mà không có domain thì bị từ chối ITMS-91064 "Invalid tracking information". Việc tracking qua quảng cáo được khai ở App Privacy trên App Store Connect.
+
+**Test:** trên Mac không có ATT; thay plugin bằng một node giả có `request_tracking_authorization()` / `initialize()`. Kiểm tra: ở nền thì chưa hỏi; vừa mở chưa hỏi ngay; ở phía trước đủ thời gian thì hỏi. Trên máy thật: xoá app, cài lại, mở: hộp thoại phải hiện trong vài giây đầu, kể cả khi đang có màn chào mừng hay hướng dẫn.
+
 ---
 
 ## 5. Thử trên máy thật: danh sách tối thiểu
 
 - [ ] Mở app không crash; màn đầu không bị tai thỏ / Dynamic Island / thanh home che.
+- [ ] App có quảng cáo: xoá app, cài lại, mở lần đầu thì hộp thoại ATT hiện trong vài giây đầu (§4.1).
 - [ ] Mọi danh sách vuốt được, kể cả khi bắt đầu trên nút (`touch-input.md`).
 - [ ] Chạm nút mở bảng: bảng không tự đóng; chạm nền mờ thì đóng.
 - [ ] Nút đủ to (khoảng 44 pt trở lên); không chạm nhầm khi vuốt.
