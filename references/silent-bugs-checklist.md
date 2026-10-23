@@ -53,6 +53,16 @@ Lỗi cảm ứng (vuốt, bảng tự đóng, chạm nhầm) ở `touch-input.m
 **1.8 Bo góc khung 3D.**
 - Đặt `SubViewportContainer` trong `Panel` có StyleBox bo góc và `clip_children = CLIP_CHILDREN_ONLY`.
 
+**1.9 Một ngày nào đó cả bảng rộng ra, tràn khỏi màn hình (nút giá, nút Close bị cắt mất).**
+- Nguyên nhân: một `Label` **không** tự xuống dòng hiện chữ thay đổi theo dữ liệu: danh sách ghép ("Out of Coffee Beans, Flour, Matcha, Cocoa and Berries"), tên người chơi tự đặt (món, quán), số lớn. Min size của Label bằng cả dòng chữ; HBox → card → ScrollContainer → panel đều nới theo min size của con, nên **cả panel** rộng ra. Ép `panel.size` mỗi frame cũng vô ích vì Godot không cho nhỏ hơn min size. Với dữ liệu bình thường thì không thấy gì; lỗi chỉ hiện vào hôm dữ liệu dài (hết 5 nguyên liệu cùng lúc), tức là sau khi đã phát hành.
+- Sửa: mọi Label có chữ lấy từ dữ liệu, nằm trong hàng ngang, phải xuống dòng (`autowrap_mode = AUTOWRAP_WORD_SMART`, `size_flags_horizontal = EXPAND_FILL`, có `custom_minimum_size.x` để không đo thành mỗi chữ một dòng) hoặc cắt bớt (`clip_text = true` / `text_overrun_behavior = OVERRUN_TRIM_ELLIPSIS`). Làm một hàm dựng sẵn (ví dụ `UiKit.heading()`) để tiêu đề nào cũng dùng; Label một dòng chỉ dành cho chữ cố định, ngắn.
+- Bắt: test "dữ liệu cực đoan" (`testing.md` §2b): đặt tên dài tối đa bằng chữ rộng nhất (`W`), cho hết mọi thứ cùng lúc, mở mọi thành phố/món, số tiền khổng lồ, rồi mở mọi bảng ở mọi cỡ màn hình và kiểm panel nằm trong màn hình, mọi control con nằm trong bề ngang panel. Kiểm thử ngược: tạm bỏ bản sửa, test phải báo lỗi.
+
+**1.10 Chữ vẽ tay (`draw_string`) tràn khỏi thẻ hoặc đè lên chữ khác.**
+- Nguyên nhân: HUD tự vẽ bằng `draw_string` không có container nào giới hạn. Chữ bên trái dài ra ("OUT OF MOON MARSHMALLOWS ›") đè lên chữ canh phải ("Clean 100%") trên cùng một thanh; số tiền khổng lồ đè lên dòng thu nhập.
+- Sửa: chữ nào lấy từ dữ liệu cũng đi qua một hàm cắt theo bề rộng còn trống (đo `font.get_string_size()`, bỏ bớt ký tự rồi thêm "..."). Bề rộng còn trống = thẻ − lề − chữ cố định bên cạnh (mũi tên, số bên phải).
+- Bắt: cho hàm vẽ chữ và vẽ thẻ ghi lại hình chữ nhật khi test bật cờ `static var audit` (bản thật chỉ tốn một phép so sánh `null`). Test vẽ lại HUD với từng nhãn có thể xuất hiện và kiểm: mỗi chữ nằm trong một thẻ, không chữ nào giao với chữ khác. Đo khung chữ theo nét (từ đường chân chữ lên khoảng 0,72 × cỡ chữ), không theo ascent + descent, nếu không hai dòng xếp chồng sẽ bị báo đè nhầm.
+
 ---
 
 ## 2. Tween, timer, coroutine
@@ -122,5 +132,7 @@ Lỗi cảm ứng (vuốt, bảng tự đóng, chạm nhầm) ở `touch-input.m
 - **Nút Back của Android:** `application/config/quit_on_go_back=false` và xử lý `NOTIFICATION_WM_GO_BACK_REQUEST` (màn chơi → danh sách → thoát).
 - **Tỉ lệ màn hình:** stretch `canvas_items` + aspect `expand`; thử ở máy dài 19,5:9 và iPad 3:4 bằng `--resolution 450x975` và `--resolution 600x800`.
 - **Rung:** `Input.vibrate_handheld(ms)`; Android cần quyền VIBRATE khi export.
+- **Định dạng số với giá trị cực đoan:** `int()` của số > 9,2e18, của `INF` hay `NAN` ra `9223372036854775807` / `-9223372036854775808` mà không báo lỗi, nên "1.2Qi" thành "9223372036854775807Qi", "pays back in 9223372036854775807 days", "+nan/s". Hàm định dạng (gọn số, tiền, tốc độ, thời gian) phải chặn `is_nan()`, vô cực và số vượt đơn vị lớn nhất ("999Qi+", "999+ days") trước khi gọi `int()`. Bắt: gọi từng hàm với `0, -0, số âm, 1e21, 1e300, INF, -INF, NAN` và kiểm chuỗi trả về ngắn, không chứa `nan`/`inf`/`922337203`.
+- **Chữ hiện ra mà chưa điền:** template `"%d"` / `"%s"` hiện nguyên, hoặc `<null>`. Test nên quét chữ của mọi Label/Button/toast bằng regex `(?i)\b(nan|inf)\b|922337203|%[-+0-9.]*[dsf]\b|<null>`, sau khi bỏ phần tên do người chơi gõ (người chơi có thể gõ "%d").
 - **Lưu tiến độ:** `ConfigFile` trong `user://`, khoá theo **id ổn định** (không theo số thứ tự màn, sẽ lệch khi chèn màn mới), có số phiên bản để bỏ save cũ không tương thích. Bỏ các khoá nội bộ (ví dụ `_line`) trước khi lưu.
 - **Màn bắt buộc chương trình hoặc nội dung ngẫu nhiên:** tách luật thành code thuần (không dùng node) để chạy được headless; UI chỉ phát lại trace mà luật sinh ra, nên hình ảnh không lệch khỏi luật. Có giới hạn số bước/số lần lặp để chặn vòng lặp vô hạn. Nội dung ngẫu nhiên thì kiểm lời giải trên **mọi** biến thể.

@@ -8,11 +8,13 @@ Skill cho [Claude Code](https://claude.com/claude-code), dùng cho mọi game Go
 |---|---|
 | `SKILL.md` | Phần Claude đọc: khi nào dùng skill, các quy tắc luôn áp dụng, khi nào mở file tham khảo nào |
 | `references/touch-input.md` | Điện thoại gửi chạm vào Godot thế nào (click giả lập rồi mới tới chạm, `mouse_filter` mặc định của từng loại control). Ba lỗi chỉ thấy trên máy thật: danh sách không vuốt được, bảng vừa mở đã tự đóng, vuốt xong bấm nhầm. Cách sửa, cử chỉ xoay/zoom/chạm đúp, cách test bằng chạm giả lập |
-| `references/silent-bugs-checklist.md` | Lỗi ngầm của Godot 4: script/class, dựng Control bằng code (anchor/offset, `reset_size`, label tự xuống dòng), tween/timer/coroutine (node đã xoá, `await` treo), 3D trên mobile (màu sRGB, tonemap, camera, glow, nhiệt), asset (GLB, SVG, WAV), nền tảng và lưu dữ liệu |
+| `references/silent-bugs-checklist.md` | Lỗi ngầm của Godot 4: script/class, dựng Control bằng code (anchor/offset, `reset_size`, label tự xuống dòng, chữ dài theo dữ liệu làm bảng tràn màn hình, chữ vẽ tay đè nhau), tween/timer/coroutine (node đã xoá, `await` treo), 3D trên mobile (màu sRGB, tonemap, camera, glow, nhiệt), asset (GLB, SVG, WAV), nền tảng và lưu dữ liệu |
 | `references/ios-export.md` | Export lên iPhone/iPad: "No presets found", tìm đúng Team ID, export và cài/mở app bằng dòng lệnh (`devicectl`), các lỗi hay gặp, danh sách thử trên máy |
-| `references/testing.md` | Thứ tự kiểm tra: script nạp được, validator headless, `--selftest` qua cảnh chính, chụp và xem ảnh màn hình, chạy hết nội dung qua UI, đo hiệu năng, thử trên máy |
+| `references/testing.md` | Thứ tự kiểm tra: script nạp được, validator headless, fuzz logic, dữ liệu cực đoan cho UI, `--selftest` qua cảnh chính, chụp và xem ảnh màn hình, chạy hết nội dung qua UI, đo hiệu năng, thử trên máy |
 | `templates/touch_scroll.gd` | ScrollContainer vuốt được cả khi chạm trúng nút, có quán tính, không bấm nhầm sau khi vuốt |
 | `templates/check_touch.gd` | Bộ hàm chạm/vuốt giả lập (`tap`, `drag`, đổi toạ độ canvas sang cửa sổ) kèm ví dụ test |
+| `templates/check_extremes.gd` | Test dữ liệu cực đoan: tên dài nhất, hết mọi thứ cùng lúc, số khổng lồ, ở mọi cỡ màn hình. Kiểm bảng không tràn màn hình, chữ HUD không ra khỏi thẻ hay đè nhau, không hiện `nan`/`inf`/số tràn |
+| `templates/fuzz_logic.gd` | Người chơi ngẫu nhiên có seed, kiểm bất biến sau mỗi bước (tiền hữu hạn, kho trong giới hạn, save tải lại y nguyên...) |
 
 Các file trong `references/` viết bằng tiếng Việt và đọc được độc lập, không cần Claude. Thông tin đo trên Godot 4.7.2, Xcode 27, macOS Apple Silicon.
 
