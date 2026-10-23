@@ -92,6 +92,20 @@ Quy tắc chung: một thao tác chỉ xử lý qua **một** trong hai đườn
 
 **Cách sửa:** hỏi ScrollContainer đã vuốt chưa (`dragged()` của `touch_scroll.gd`); hoặc so vị trí *toàn cục* (`get_global_transform() * event.position`); hoặc dùng cách A ở 2.1 (ScrollContainer bảo nút bỏ cú nhấn).
 
+### 2.4 Bàn phím ảo che ô đang gõ, và không tắt được
+
+**Triệu chứng:** trên máy thật, chạm vào một `LineEdit` nằm thấp trong bảng (bottom sheet) thì bàn phím iOS/Android trồi lên che mất ô, không thấy chữ đang gõ. Chạm ra ngoài bàn phím vẫn không tắt. Bàn phím số (`KEYBOARD_TYPE_NUMBER`, ví dụ ô PIN) còn không có phím Return, nên người chơi kẹt, chỉ thoát được bằng cách đóng bảng. Trên Mac không bao giờ thấy vì không có bàn phím ảo.
+
+**Nguyên nhân:** Godot không tự đẩy giao diện lên khi bàn phím hiện, và bàn phím chỉ tắt khi `LineEdit` mất focus. Mà chạm vào nền hay nhãn chữ không lấy focus khỏi ô.
+
+**Cách sửa** (đặt một lần trong lớp cha của mọi bảng):
+- Mỗi khung hình đọc `DisplayServer.virtual_keyboard_get_height()`. Giá trị là pixel *của cửa sổ*, nên phải đổi sang đơn vị viewport: nhân với `viewport_height / DisplayServer.window_get_size().y` rồi chia cho scale của bảng. Khi chiều cao này > 0 thì đặt bảng nằm ngay trên bàn phím, thu ngắn lại cho vừa phần màn hình còn lại, rồi `scroll.ensure_control_visible(ô_đang_focus)` (gọi deferred, để layout cập nhật xong đã). Khi bàn phím tắt thì trả bảng về chỗ cũ.
+- Trong `_input()` của bảng: một cú nhấn chuột (chạm giả lập) nằm ngoài vùng của ô đang focus (`get_global_transform_with_canvas() * Rect2(Vector2.ZERO, size)`) thì gọi `release_focus()`. Không gọi `set_input_as_handled()`: cú chạm vẫn phải làm việc của nó (bấm nút, chuyển tab).
+- Ô số: gõ đủ số ký tự (ví dụ 6 số PIN) thì tự `release_focus()`. Ô chữ: nối `text_submitted` với `release_focus()`.
+- Đổi tab hoặc đóng bảng thì nhả focus, nếu không bàn phím vẫn treo trên màn hình.
+
+**Test trên Mac:** cho bảng một biến tĩnh giả chiều cao bàn phím (pixel cửa sổ, `-1` = dùng bàn phím thật). Chạm ô bằng `Input.parse_input_event` (`InputEventScreenTouch`), **sau đó** mới đặt chiều cao giả, giống thứ tự trên máy thật: nếu đặt trước, bảng nâng lên trước rồi cú chạm rơi vào chỗ trống. Kiểm tra mép dưới bảng ≤ mép trên bàn phím, ô nằm trong bảng, chạm vào tiêu đề thì ô mất focus, gỡ bàn phím thì bảng về đáy. Khi headless, `window_get_size()` có thể bằng 0, nên hàm đổi đơn vị phải có nhánh dự phòng.
+
 ---
 
 ## 3. Cử chỉ khác

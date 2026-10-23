@@ -9,7 +9,7 @@ description: Hard-won checklist for Godot 4 games that ship to phones (iOS/Andro
 
 | Situation | Read |
 |---|---|
-| Any ScrollContainer, list, sheet, popup, backdrop, drag, swipe, pinch or "tap does nothing / fires twice" | `references/touch-input.md` |
+| Any ScrollContainer, list, sheet, popup, backdrop, drag, swipe, pinch, text field / on-screen keyboard, or "tap does nothing / fires twice" | `references/touch-input.md` |
 | Building Controls in code, layout looks collapsed/off-screen, tweens or `await` misbehave, 3D looks pale, text shows boxes, imported assets look wrong | `references/silent-bugs-checklist.md` |
 | Export to iPhone/iPad, "No presets found", signing, installing/launching on a device, device heat | `references/ios-export.md` |
 | Before saying something works: tests, simulated touch, screenshots, level/content validators, profiling | `references/testing.md` |
@@ -29,6 +29,7 @@ Templates (copy into the project, adapt names):
 - A phone delivers each touch as an emulated mouse click *and* a touch event. Handle a given gesture through one of them only; Buttons react to the mouse half.
 - Every scrollable list must be swipeable when the swipe starts on a child Button/Panel. Either pass touches through (`mouse_filter = PASS` on all content, `scroll_deadzone` ≈ 14) or use `templates/touch_scroll.gd`. A release after a swipe must not press the button or select the row under the finger.
 - A backdrop that closes a sheet must arm on its own press and close on its own release, so the tap that opened the sheet can't close it.
+- Every text field in a sheet: the sheet rises above the on-screen keyboard (`DisplayServer.virtual_keyboard_get_height()`, window pixels) with the field scrolled into view, and a tap outside the field releases its focus; a number pad has no return key (`references/touch-input.md` §2.4).
 - Set `input_devices/pointing/emulate_touch_from_mouse=true` so mouse drags behave like a finger on desktop, and test with simulated touch (`templates/check_touch.gd`), not only the mouse wheel.
 
 **Controls built in code**
