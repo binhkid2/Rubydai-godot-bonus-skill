@@ -52,13 +52,13 @@ Clone straight into the skills folder (macOS/Linux):
 
 ```sh
 mkdir -p ~/.claude/skills
-git clone https://github.com/binhkid2/Rubydai-godot-bonus-skill.git ~/.claude/skills/rubydai-godot-bonus-skill
+git clone https://github.com/rubydai-dev/Rubydai-godot-bonus-skill.git ~/.claude/skills/rubydai-godot-bonus-skill
 ```
 
 On Windows (PowerShell):
 
 ```powershell
-git clone https://github.com/binhkid2/Rubydai-godot-bonus-skill.git "$env:USERPROFILE\.claude\skills\rubydai-godot-bonus-skill"
+git clone https://github.com/rubydai-dev/Rubydai-godot-bonus-skill.git "$env:USERPROFILE\.claude\skills\rubydai-godot-bonus-skill"
 ```
 
 Update later with `git -C <that folder> pull`.

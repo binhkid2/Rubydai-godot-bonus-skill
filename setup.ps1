@@ -6,7 +6,7 @@
 $Desktop = [Environment]::GetFolderPath('Desktop')
 # One entry per skill: skill name, repo URL, folder that holds the clone
 $Skills = @(
-    @{ Name = 'rubydai-godot-bonus-skill'; Url = 'https://github.com/binhkid2/Rubydai-godot-bonus-skill.git'; Parent = (Join-Path $Desktop 'Godot game projects') }
+    @{ Name = 'rubydai-godot-bonus-skill'; Url = 'https://github.com/rubydai-dev/Rubydai-godot-bonus-skill.git'; Parent = (Join-Path $Desktop 'Godot game projects') }
 )
 
 # Lines that must be in ~/.claude/CLAUDE.md.

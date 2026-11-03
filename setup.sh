@@ -6,7 +6,7 @@
 # ---- Configuration --------------------------------------------------------
 # One line per skill: skill name | repo URL | folder that holds the clone
 SKILLS=(
-  "rubydai-godot-bonus-skill|https://github.com/binhkid2/Rubydai-godot-bonus-skill.git|$HOME/Desktop/Godot game projects"
+  "rubydai-godot-bonus-skill|https://github.com/rubydai-dev/Rubydai-godot-bonus-skill.git|$HOME/Desktop/Godot game projects"
 )
 
 # Lines that must be in ~/.claude/CLAUDE.md: skill name | line.
