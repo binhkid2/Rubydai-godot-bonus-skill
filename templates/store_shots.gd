@@ -1,5 +1,5 @@
 extends SceneTree
-## App Store screenshots on the Mac, without the iOS Simulator: renders a scene at the size App Store Connect asks
+## App Store screenshots on the desktop (macOS, Windows or Linux), without the iOS Simulator: renders a scene at the size App Store Connect asks
 ## for, with the device's notch and home bar kept clear, and saves a PNG. See references/testing.md §5.
 ##
 ##   godot --path . --script res://tools/store_shots.gd -- --device iphone --out res://shots/appstore
@@ -17,7 +17,7 @@ const DEVICES := {
 ## The script holding the HUD's simulated safe area, and the static var's name. "" to skip.
 const SAFE_AREA_SCRIPT := "res://scripts/hud.gd"
 const SAFE_AREA_VAR := "simulated_safe"
-## Real time, not frames: a 120 Hz Mac runs frames twice as fast.
+## Real time, not frames: a 120 Hz display runs frames twice as fast.
 const WAIT_SECONDS := 2.0
 
 func _initialize() -> void:
@@ -33,7 +33,7 @@ func run() -> void:
 	var phone: Dictionary = DEVICES[device]
 	if SAFE_AREA_SCRIPT != "" and ResourceLoader.exists(SAFE_AREA_SCRIPT):
 		load(SAFE_AREA_SCRIPT).set(SAFE_AREA_VAR, phone.safe)
-	# A bordered window taller than the Mac's screen gets cut to the screen's height; a borderless one keeps its size.
+	# A bordered window taller than the screen gets cut to the screen's height (measured on macOS); a borderless one keeps its size.
 	root.borderless = true
 	root.size = phone.size
 	var scene_path := arg("--scene", str(ProjectSettings.get_setting("application/run/main_scene")))

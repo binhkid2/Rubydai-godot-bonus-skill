@@ -1,18 +1,21 @@
 ---
-name: binh-godot-bonus-skill
-description: Hard-won checklist for Godot 4 games that ship to phones (iOS/Android) — touch bugs that never show with a mouse (lists that won't swipe because buttons swallow the touch, a sheet that closes right after it opens, a tap that fires after a swipe), Control layout traps (anchors vs offsets, autowrap sizes, reset_size), tweens/coroutines on freed nodes and awaits that hang, mobile rendering (sRGB vertex colors, washed-out tonemapping, SubViewport cameras, 120 Hz heat), fonts missing glyphs, GLB/texture import, iOS export ("No presets found", signing, installing on a device with devicectl), and how to verify with headless validators, a --selftest scene, simulated touch and screenshots — on the Mac at phone sizes, never the iOS Simulator, including App Store screenshots. Use whenever working in a Godot project — building UI, ScrollContainers, sheets/popups, 3D scenes, input or gestures, export/deploy to iPhone or Android, or checking work before the user tests on a device — even if the user doesn't ask for a checklist.
+name: rubydai-godot-bonus-skill
+description: Hard-won checklist for Godot 4 phone games (iOS/Android), built on macOS, Windows or Linux — touch bugs that never show with a mouse (lists that won't swipe because buttons keep the touch, a sheet that closes right after it opens, a tap that fires after a swipe), Control layout traps (anchors/offsets, autowrap, reset_size), tweens/coroutines on freed nodes and hanging awaits, mobile rendering (sRGB vertex colors, washed-out tonemapping, 120 Hz heat), missing glyphs, GLB import, Android export (adb, logcat, signing), iOS export (Mac only: "No presets found", signing, devicectl), and verifying with headless validators, a --selftest scene, simulated touch and screenshots at phone sizes on the desktop, including App Store screenshots, never the iOS Simulator. Use whenever working in a Godot project — UI, ScrollContainers, sheets/popups, 3D scenes, input or gestures, export/deploy to iPhone or Android, or checking work before the user tests on a device, even if the user doesn't ask for a checklist.
 ---
 
 # Godot mobile bonus skill: touch, layout, coroutines, export, verification
 
-"Runs in the editor" is not "works on a phone". A mouse on a Mac hides every touch bug, and the editor hides export problems. The full guides are in `references/` (written in Vietnamese); read the relevant one before acting, and reuse `templates/` rather than re-deriving them.
+"Runs in the editor" is not "works on a phone". A desktop mouse hides every touch bug, and the editor hides export problems. The full guides are in `references/`; read the relevant one before acting, and reuse `templates/` rather than re-deriving them.
+
+Works the same on macOS, Windows and Linux, except iOS export, which needs a Mac with Xcode. Before running Godot from a terminal, find the Godot binary for the current OS (`references/testing.md` §0); the commands here write it as `godot`.
 
 | Situation | Read |
 |---|---|
 | Any ScrollContainer, list, sheet, popup, backdrop, drag, swipe, pinch, text field / on-screen keyboard, or "tap does nothing / fires twice" | `references/touch-input.md` |
-| Building Controls in code, layout looks collapsed/off-screen, tweens or `await` misbehave, 3D looks pale, text shows boxes, imported assets look wrong | `references/silent-bugs-checklist.md` |
+| Building Controls in code, layout looks collapsed/off-screen, tweens or `await` misbehave, 3D looks pale, text shows boxes, imported assets look wrong, a file loads in the editor but not in an export | `references/silent-bugs-checklist.md` |
+| Export to Android, installing/launching with `adb`, reading the device log, keystores, Play Store bundles | `references/android-export.md` |
 | Export to iPhone/iPad, "No presets found", signing, installing/launching on a device, device heat, AdMob / tracking (ATT) prompt for App Review | `references/ios-export.md` |
-| Before saying something works: tests, simulated touch, screenshots, level/content validators, profiling | `references/testing.md` |
+| Running Godot from a terminal, before saying something works: tests, simulated touch, screenshots, level/content validators, profiling | `references/testing.md` |
 | A panel/sheet suddenly wider than the screen, HUD text running into other text, "nan"/"9223372036854775807" on screen, before any release | `references/silent-bugs-checklist.md` §1.9–1.10, §5 and `references/testing.md` §2a–2b |
 | Testing UI at phone/tablet sizes, App Store screenshots, or tempted to use the iOS Simulator | `references/testing.md` §5 |
 
@@ -21,7 +24,7 @@ Templates (copy into the project, adapt names):
 - `templates/check_touch.gd` — real touch events through `Input.parse_input_event` (tap, drag, canvas→window coordinates) plus example checks.
 - `templates/check_extremes.gd` — worst-case data (longest names, everything sold out, huge numbers) at every screen size: panels on screen, HUD text inside its card and off other text, no broken numbers.
 - `templates/fuzz_logic.gd` — a seeded random player with invariants after every step, including save → load → same.
-- `templates/store_shots.gd` — App Store screenshots on the Mac at iPhone 6.9" (1320×2868) / iPad 13" (2064×2752) with a simulated notch and home bar (borderless window, so it may be taller than the screen).
+- `templates/store_shots.gd` — App Store screenshots on the desktop at iPhone 6.9" (1320×2868) / iPad 13" (2064×2752) with a simulated notch and home bar (borderless window, so it may be taller than the screen).
 
 ## Always-on rules (apply without being asked)
 
@@ -47,25 +50,26 @@ Templates (copy into the project, adapt names):
 
 **Mobile rendering and platform**
 - Vertex/instance colors written as sRGB need `vertex_color_is_srgb = true`. Check colors on a screenshot, not in your head; AgX/strong fog washes out flat-colored scenes.
-- Cap `application/run/max_fps=60` (ProMotion runs at 120 Hz and heats the phone); use MSAA 2× on mobile; guard camera math against a zero-size viewport.
+- Cap `application/run/max_fps=60` (ProMotion and many Android phones run at 90–120 Hz and heat up); use MSAA 2× on mobile; guard camera math against a zero-size viewport.
 - Respect the safe area (top notch, bottom home bar) and `application/config/quit_on_go_back=false` with your own back handling on Android.
 - Bundled fonts must contain every glyph you print (`FontFile.has_char`); emoji and symbols like ⏭ ★ are usually missing.
+- `res://` paths must match the file name's exact case. Windows and macOS file systems ignore case, so a wrong case works in the editor there, then fails on Linux and inside exported games (`references/silent-bugs-checklist.md` §4.7).
 
 **Export and devices**
-- No `export_presets.cfg` means the Export dialog shows "No presets found": create the preset (team ID, bundle ID) before telling the user how to deploy; reload the project if the editor was open.
-- Export from the CLI and install with `xcrun devicectl` to prove the build works before handing it over (`references/ios-export.md`).
+- No `export_presets.cfg` means the Export dialog shows "No presets found": create the preset (package/bundle ID, and the team ID for iOS) before telling the user how to deploy; reload the project if the editor was open.
+- Export from the CLI and install with `adb` (Android) or `xcrun devicectl` (iOS, on a Mac) to prove the build works before handing it over (`references/android-export.md`, `references/ios-export.md`).
 - A game with ads asks App Tracking Transparency at the first launch, about a second after it's on screen and in front (asked during startup, iOS silently drops the prompt; asked later, after a tutorial or the first ad, App Review never sees it and rejects the app). Ads can still be offered later (`references/ios-export.md` §4.1).
 
-**Where to test (no iOS Simulator)**
+**Where to test (no iOS Simulator, no emulator for UI work)**
 - Never use or build anything for the iOS Simulator for a Godot game: the official template's simulator slice is x86_64-only, native plugins are device-only, and a self-built simulator engine runs OpenGL ES on the CPU (minutes per frame in 3D). The owner considers it over-engineering.
-- Test UI, layout and game logic on the Mac: Godot's ▶ with an iPhone-shaped window override (e.g. 440×956), headless tools, and capture tools at device sizes with a simulated safe area. Take App Store screenshots the same way (`references/testing.md` §5).
-- Use the real iPhone/iPad only for performance, heat, touch feel, sound and native plugins (ads, purchases, notifications).
+- Test UI, layout and game logic on the desktop (any OS): Godot's ▶ with a phone-shaped window override (e.g. 440×956), headless tools, and capture tools at device sizes with a simulated safe area. Take App Store screenshots the same way (`references/testing.md` §5).
+- Use a real phone/tablet only for performance, heat, touch feel, sound and native plugins (ads, purchases, notifications).
 
 **Verification**
 - Run the project's validators and `--selftest` scene (with autoloads) after changes; take screenshots of every screen you touched and look at them.
 - Test with worst-case data, not just the save at hand: every text at its longest, every list full, everything sold out at once, huge and negative numbers, every screen size (`templates/check_extremes.gd`). Logic gets a seeded random player with invariants (`templates/fuzz_logic.gd`). Before a release, run both.
 - After writing a test for a bug, put the bug back for a moment and see the test fail; print enough to know the scenario really appeared.
-- Wait by real time before screenshots (`create_timer`), not frame counts: a 120 Hz Mac runs frames twice as fast.
+- Wait by real time before screenshots (`create_timer`), not frame counts: a 120 Hz display runs frames twice as fast.
 - `--check-only` reports autoload names as missing; that's expected. New `class_name` files need `godot --headless --path . --import` before other scripts can see them.
 - Say what was verified and how; say what still needs a real device (feel of scrolling, heat, sound).
 

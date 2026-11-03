@@ -1,23 +1,24 @@
 class_name TouchScroll
 extends ScrollContainer
-## ScrollContainer vuốt bằng ngón tay được cả khi chạm trúng nút con, có quán tính.
-## Kéo gốc của Godot chỉ chạy khi cú chạm tới được ScrollContainer, mà nút con thì giữ cú chạm,
-## nên ở đây tự xử lý vuốt trong _input (chạy trước khi nút nhận chạm) và tắt kéo gốc bằng deadzone rất lớn.
-## Nút con gọi dragged() lúc nhả tay để bỏ qua cú chạm vừa dùng để vuốt.
+## A ScrollContainer that swipes with a finger even when the touch lands on a child button, with inertia.
+## Godot's built-in drag only works when the touch reaches the ScrollContainer, but child buttons keep the touch,
+## so this handles the swipe itself in _input (which runs before buttons get the touch) and disables the
+## built-in drag with a huge deadzone.
+## Child buttons call dragged() on release to ignore the touch that was used for swiping.
 ##
-## Dùng thay cho ScrollContainer:
+## Use it instead of ScrollContainer:
 ##   var scroll := TouchScroll.new()
-##   scroll.guard = func() -> bool: return popup_open          # tuỳ chọn: chặn vuốt khi có lớp phủ
+##   scroll.guard = func() -> bool: return popup_open          # optional: block swipes while an overlay is open
 ##   button.pressed.connect(func() -> void:
-##       if scroll.dragged(): return                            # nhả tay sau khi vuốt: không bấm
+##       if scroll.dragged(): return                            # release after a swipe: don't press
 ##       open_item())
-## Hàng tự nhận chạm (ScreenTouch trong _gui_input) cũng hỏi scroll.dragged() lúc nhả tay.
-## Con lăn chuột và thanh cuộn vẫn chạy như ScrollContainer thường.
+## Rows with their own touch handling (ScreenTouch in _gui_input) also ask scroll.dragged() on release.
+## The mouse wheel and the scrollbar still work like a normal ScrollContainer.
 
 const SLOP := 14.0
 const FRICTION := 0.03
 
-## Trả về true thì bỏ qua cú chạm (ví dụ đang có lớp phủ che lên).
+## Returns true to ignore the touch (e.g. an overlay is covering the list).
 var guard := Callable()
 var _touch := -1
 var _start := Vector2.ZERO
@@ -51,7 +52,7 @@ func _input(event: InputEvent) -> void:
 			_touch = -1
 			if _dragging:
 				_dragging = false
-				# Giữ cờ tới hết frame này để nút con (xử lý sau _input) biết đây là cú vuốt.
+				# Keep the flag until the end of this frame so child buttons (handled after _input) know it was a swipe.
 				_released_drag = true
 				set_deferred("_released_drag", false)
 	elif event is InputEventScreenDrag and event.index == _touch:

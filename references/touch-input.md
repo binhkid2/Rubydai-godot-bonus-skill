@@ -1,36 +1,36 @@
-# Cảm ứng trong Godot 4 trên điện thoại
+# Touch input in Godot 4 on phones
 
-Chuột trên Mac che gần hết lỗi cảm ứng. Tài liệu này giải thích điện thoại gửi chạm vào Godot thế nào, ba lỗi hay gặp nhất, cách sửa và cách test bằng chạm giả lập.
-
----
-
-## 1. Điện thoại gửi một cú chạm thế nào
-
-- Ngón tay sinh ra `InputEventScreenTouch` (nhấn/nhả) và `InputEventScreenDrag` (kéo), mỗi ngón có một `index`.
-- `input_devices/pointing/emulate_mouse_from_touch` mặc định bật: Godot sinh thêm `InputEventMouseButton` / `InputEventMouseMotion` giả lập. **Click giả lập tới trước, sau đó mới tới chính sự kiện chạm.** Một cú chạm vì thế tới **hai lần**.
-- `Button` (mọi `BaseButton`) phản ứng với phần chuột: nhấn rồi nhả chuột trong nút thì phát `pressed`.
-- Thứ tự xử lý: `_input()` của mọi node → GUI (`_gui_input` theo control dưới ngón tay) → `_unhandled_input()`. Vì vậy `_input()` thấy cú nhả tay **trước** khi nút phát `pressed`.
-- `mouse_filter` (mặc định đo trên Godot 4.7):
-  - `STOP`: nhận sự kiện và **không** cho lan lên cha. Mặc định của `Control`, `Button`, `Panel`, **`PanelContainer`**, `ColorRect`, `RichTextLabel`. Thẻ làm bằng `PanelContainer` trong danh sách cũng chặn vuốt.
-  - `PASS`: nhận rồi cho lan lên cha. Mặc định của `VBoxContainer`, `HBoxContainer`, `MarginContainer`, `ScrollContainer`, `TextureRect`, `SubViewportContainer`.
-  - `IGNORE`: bỏ qua, sự kiện rơi xuống control bên dưới. Mặc định của `Label`.
-  - Thứ tự `_input` đo được cho một cú chạm: `MouseButton(nhấn)`, `ScreenTouch(nhấn)`, `MouseButton(nhả)`, `ScreenTouch(nhả)`.
-- `ScrollContainer` tự kéo bằng ngón tay chỉ khi `DisplayServer.is_touchscreen_available()`. Trên điện thoại là có; trên desktop chỉ có khi bật `input_devices/pointing/emulate_touch_from_mouse`. Lăn chuột luôn cuộn được, nên "trên Mac cuộn được" không nói lên gì.
+A desktop mouse hides almost every touch bug. This guide explains how a phone delivers touches to Godot, the three most common bugs, how to fix them, and how to test with simulated touch.
 
 ---
 
-## 2. Ba lỗi chỉ lộ ra trên máy thật
+## 1. How a phone delivers a touch
 
-### 2.1 Danh sách không vuốt được
+- A finger produces `InputEventScreenTouch` (press/release) and `InputEventScreenDrag` (move); each finger has its own `index`.
+- `input_devices/pointing/emulate_mouse_from_touch` is on by default: Godot also generates emulated `InputEventMouseButton` / `InputEventMouseMotion`. **The emulated click arrives first, then the touch event itself.** So every touch arrives **twice**.
+- `Button` (every `BaseButton`) reacts to the mouse half: a mouse press and release inside the button emits `pressed`.
+- Processing order: `_input()` on every node → GUI (`_gui_input` on the control under the finger) → `_unhandled_input()`. So `_input()` sees the release **before** the button emits `pressed`.
+- `mouse_filter` (defaults measured on Godot 4.7):
+  - `STOP`: receives the event and does **not** pass it to the parent. Default for `Control`, `Button`, `Panel`, **`PanelContainer`**, `ColorRect`, `RichTextLabel`. Cards built from `PanelContainer` inside a list block swipes too.
+  - `PASS`: receives it, then passes it to the parent. Default for `VBoxContainer`, `HBoxContainer`, `MarginContainer`, `ScrollContainer`, `TextureRect`, `SubViewportContainer`.
+  - `IGNORE`: ignores it; the event falls through to the control below. Default for `Label`.
+  - Measured `_input` order for one tap: `MouseButton(press)`, `ScreenTouch(press)`, `MouseButton(release)`, `ScreenTouch(release)`.
+- `ScrollContainer` drags with a finger only when `DisplayServer.is_touchscreen_available()`. That is true on a phone; on desktop only when `input_devices/pointing/emulate_touch_from_mouse` is on. The mouse wheel always scrolls, so "it scrolls on desktop" proves nothing.
 
-**Triệu chứng:** danh sách màn, cửa hàng, bảng cài đặt... không vuốt lên xuống được. Thanh cuộn vẫn kéo được, con lăn chuột trên Mac vẫn cuộn.
+---
 
-**Nguyên nhân:** nội dung là nút/thẻ có `mouse_filter = STOP`. Ngón tay đặt trúng nút, nút giữ cú chạm, `ScrollContainer` không bao giờ nhận được thao tác kéo. Chỉ vuốt ở khe hở giữa các nút mới cuộn được.
+## 2. Three bugs that only show on a real device
 
-**Cách sửa A: cho chạm lan lên ScrollContainer** (giữ hành vi gốc của Godot, hợp với nội dung là Button thường):
+### 2.1 A list that won't swipe
+
+**Symptom:** the level list, shop, settings panel, etc. won't swipe up or down. The scrollbar can still be dragged, and the mouse wheel on desktop still scrolls.
+
+**Cause:** the content is buttons/cards with `mouse_filter = STOP`. The finger lands on a button, the button keeps the touch, and the `ScrollContainer` never receives a drag. Only swipes that start in the gaps between buttons scroll.
+
+**Fix A: let touches pass up to the ScrollContainer** (keeps Godot's built-in behavior; good when the content is ordinary Buttons):
 
 ```gdscript
-scroll.scroll_deadzone = 14   # ngón tay đi quá 14 px mới thành cuộn; dưới mức đó vẫn là chạm
+scroll.scroll_deadzone = 14   # the finger must move more than 14 px to become a scroll; below that it's still a tap
 
 func pass_touches_to_scroll(node: Node) -> void:
 	if node is Control and node.mouse_filter == Control.MOUSE_FILTER_STOP:
@@ -38,33 +38,33 @@ func pass_touches_to_scroll(node: Node) -> void:
 	for child in node.get_children():
 		pass_touches_to_scroll(child)
 
-# Node thêm vào sau (dựng lại hàng) cũng phải PASS:
+# Nodes added later (rebuilt rows) must PASS too:
 get_tree().node_added.connect(func(n: Node) -> void:
 	if content.is_ancestor_of(n): pass_touches_to_scroll(n))
 ```
 
-Khi ngón tay vượt deadzone, ScrollContainer bảo nút bỏ cú nhấn, nên vuốt không bấm nhầm nút.
+Once the finger passes the deadzone, the ScrollContainer tells the button to drop the press, so a swipe doesn't press the button.
 
-**Cách sửa B: ScrollContainer tự xử lý vuốt** (`templates/touch_scroll.gd`). Dùng khi các hàng có cách nhận chạm riêng (dòng code tự vẽ, ô có vùng chạm đặc biệt), khi cần chặn vuốt lúc có lớp phủ (`guard`), hoặc khi muốn chắc chắn không phụ thuộc cách nút xử lý cú chạm. Nó:
-- bắt vuốt trong `_input()` nếu cú chạm bắt đầu trong khung của nó, kể cả trúng nút;
-- tắt kéo gốc bằng `scroll_deadzone` rất lớn để không cuộn hai lần;
-- có quán tính khi thả tay;
-- cho con hỏi `dragged()` lúc nhả tay để bỏ qua cú chạm vừa dùng để vuốt.
+**Fix B: the ScrollContainer handles swipes itself** (`templates/touch_scroll.gd`). Use it when rows have their own tap handling (hand-drawn code lines, cells with special hit areas), when swipes must be blocked while an overlay is open (`guard`), or when you want to be sure you don't depend on how buttons handle touches. It:
+- catches the swipe in `_input()` if the touch started inside its rect, even on a button;
+- disables the built-in drag with a huge `scroll_deadzone` so it doesn't scroll twice;
+- adds inertia on release;
+- lets children ask `dragged()` on release to ignore the touch that was used for swiping.
 
 ```gdscript
 b.pressed.connect(func() -> void:
-	if scroll.dragged():   # nhả tay sau khi vuốt: không mở màn
+	if scroll.dragged():   # release after a swipe: don't open the level
 		return
 	open_level(i))
 ```
 
-### 2.2 Bảng vừa mở đã tự đóng
+### 2.2 A sheet that closes right after it opens
 
-**Triệu chứng:** chạm nút mở bảng/thẻ, bảng hiện lên rồi biến mất ngay. Trên Mac bằng chuột thì bình thường.
+**Symptom:** tapping a button that opens a sheet/card shows it and then it disappears immediately. With a mouse on desktop it works fine.
 
-**Nguyên nhân:** nút mở bảng khi nhận *click giả lập* (nửa đầu của cú chạm). Ngay sau đó *sự kiện chạm* (nửa sau) tới và rơi vào nền mờ của bảng vừa mở. Nền mờ nghe "nhả tay" là đóng.
+**Cause:** the button opens the sheet on the *emulated click* (the first half of the touch). Right after, the *touch event* (the second half) arrives and lands on the backdrop of the sheet that just opened. The backdrop hears "release" and closes.
 
-**Cách sửa:** nền mờ chỉ nghe một loại sự kiện (chuột), và chỉ đóng khi chính nó nhận cả nhấn lẫn nhả; bỏ qua chạm trong khoảng 300 ms đầu sau khi mở.
+**Fix:** the backdrop listens to only one kind of event (mouse), and closes only when it received both the press and the release itself; ignore taps for the first ~300 ms after opening.
 
 ```gdscript
 const IGNORE_TAPS_FOR_MS := 300
@@ -72,7 +72,7 @@ var opened_at := Time.get_ticks_msec()
 var armed := false
 
 func _on_backdrop_input(event: InputEvent) -> void:
-	# Chạm tới hai lần (click giả lập rồi tới chạm); nghe click là đủ.
+	# A touch arrives twice (emulated click, then touch); listening to the click is enough.
 	if not event is InputEventMouseButton or event.button_index != MOUSE_BUTTON_LEFT:
 		return
 	if event.pressed:
@@ -82,57 +82,57 @@ func _on_backdrop_input(event: InputEvent) -> void:
 		close()
 ```
 
-Quy tắc chung: một thao tác chỉ xử lý qua **một** trong hai đường (chuột *hoặc* chạm), không cả hai, nếu không sẽ chạy hai lần.
+General rule: handle a given gesture through **one** of the two paths (mouse *or* touch), never both, or it runs twice.
 
-### 2.3 Vuốt xong lại "chạm" trúng nút hoặc dòng
+### 2.3 A swipe that ends up "tapping" a button or row
 
-**Triệu chứng:** vuốt danh sách rồi nhả tay thì mở luôn màn dưới ngón tay, hoặc chọn nhầm một dòng.
+**Symptom:** swiping a list and lifting the finger opens the level under the finger, or selects the wrong row.
 
-**Nguyên nhân:** cách nhận chạm tự viết so sánh vị trí *cục bộ* lúc nhấn và lúc nhả. Nội dung cuộn theo ngón tay nên vị trí cục bộ gần như không đổi, cú vuốt bị coi là cú chạm. Nút phát `pressed` nếu lúc nhả ngón tay vẫn nằm trong nút, mà nút thì đã trôi theo ngón tay.
+**Cause:** hand-written tap detection compares the *local* position at press and at release. The content scrolls with the finger, so the local position barely changes and the swipe counts as a tap. A button emits `pressed` if the finger is still inside it on release, and the button has moved along with the finger.
 
-**Cách sửa:** hỏi ScrollContainer đã vuốt chưa (`dragged()` của `touch_scroll.gd`); hoặc so vị trí *toàn cục* (`get_global_transform() * event.position`); hoặc dùng cách A ở 2.1 (ScrollContainer bảo nút bỏ cú nhấn).
+**Fix:** ask the ScrollContainer whether it was dragged (`dragged()` in `touch_scroll.gd`); or compare *global* positions (`get_global_transform() * event.position`); or use fix A from 2.1 (the ScrollContainer tells the button to drop the press).
 
-### 2.4 Bàn phím ảo che ô đang gõ, và không tắt được
+### 2.4 The on-screen keyboard covers the field and won't go away
 
-**Triệu chứng:** trên máy thật, chạm vào một `LineEdit` nằm thấp trong bảng (bottom sheet) thì bàn phím iOS/Android trồi lên che mất ô, không thấy chữ đang gõ. Chạm ra ngoài bàn phím vẫn không tắt. Bàn phím số (`KEYBOARD_TYPE_NUMBER`, ví dụ ô PIN) còn không có phím Return, nên người chơi kẹt, chỉ thoát được bằng cách đóng bảng. Trên Mac không bao giờ thấy vì không có bàn phím ảo.
+**Symptom:** on a device, tapping a `LineEdit` low in a bottom sheet brings up the iOS/Android keyboard on top of the field, so you can't see what you type. Tapping outside the keyboard doesn't dismiss it. A number pad (`KEYBOARD_TYPE_NUMBER`, e.g. a PIN field) has no Return key at all, so the player is stuck and can only escape by closing the sheet. You never see this on desktop because there's no on-screen keyboard.
 
-**Nguyên nhân:** Godot không tự đẩy giao diện lên khi bàn phím hiện, và bàn phím chỉ tắt khi `LineEdit` mất focus. Mà chạm vào nền hay nhãn chữ không lấy focus khỏi ô.
+**Cause:** Godot doesn't push the UI up when the keyboard appears, and the keyboard only hides when the `LineEdit` loses focus. Tapping the background or a label doesn't take focus away from the field.
 
-**Cách sửa** (đặt một lần trong lớp cha của mọi bảng):
-- Mỗi khung hình đọc `DisplayServer.virtual_keyboard_get_height()`. Giá trị là pixel *của cửa sổ*, nên phải đổi sang đơn vị viewport: nhân với `viewport_height / DisplayServer.window_get_size().y` rồi chia cho scale của bảng. Khi chiều cao này > 0 thì đặt bảng nằm ngay trên bàn phím, thu ngắn lại cho vừa phần màn hình còn lại, rồi `scroll.ensure_control_visible(ô_đang_focus)` (gọi deferred, để layout cập nhật xong đã). Khi bàn phím tắt thì trả bảng về chỗ cũ.
-- Trong `_input()` của bảng: một cú nhấn chuột (chạm giả lập) nằm ngoài vùng của ô đang focus (`get_global_transform_with_canvas() * Rect2(Vector2.ZERO, size)`) thì gọi `release_focus()`. Không gọi `set_input_as_handled()`: cú chạm vẫn phải làm việc của nó (bấm nút, chuyển tab).
-- Ô số: gõ đủ số ký tự (ví dụ 6 số PIN) thì tự `release_focus()`. Ô chữ: nối `text_submitted` với `release_focus()`.
-- Đổi tab hoặc đóng bảng thì nhả focus, nếu không bàn phím vẫn treo trên màn hình.
+**Fix** (put it once in the base class of every sheet):
+- Every frame, read `DisplayServer.virtual_keyboard_get_height()`. It's in *window* pixels, so convert it to viewport units: multiply by `viewport_height / DisplayServer.window_get_size().y`, then divide by the sheet's scale. When the height is > 0, place the sheet right above the keyboard, shrink it to fit the remaining screen, then `scroll.ensure_control_visible(focused_field)` (deferred, so layout has updated first). When the keyboard hides, put the sheet back.
+- In the sheet's `_input()`: a mouse press (emulated touch) outside the focused field's rect (`get_global_transform_with_canvas() * Rect2(Vector2.ZERO, size)`) calls `release_focus()`. Don't call `set_input_as_handled()`: the tap must still do its job (press a button, switch tabs).
+- Number fields: once enough characters are typed (e.g. a 6-digit PIN), call `release_focus()` automatically. Text fields: connect `text_submitted` to `release_focus()`.
+- Switching tabs or closing the sheet releases focus, otherwise the keyboard stays on screen.
 
-**Test trên Mac:** cho bảng một biến tĩnh giả chiều cao bàn phím (pixel cửa sổ, `-1` = dùng bàn phím thật). Chạm ô bằng `Input.parse_input_event` (`InputEventScreenTouch`), **sau đó** mới đặt chiều cao giả, giống thứ tự trên máy thật: nếu đặt trước, bảng nâng lên trước rồi cú chạm rơi vào chỗ trống. Kiểm tra mép dưới bảng ≤ mép trên bàn phím, ô nằm trong bảng, chạm vào tiêu đề thì ô mất focus, gỡ bàn phím thì bảng về đáy. Khi headless, `window_get_size()` có thể bằng 0, nên hàm đổi đơn vị phải có nhánh dự phòng.
-
----
-
-## 3. Cử chỉ khác
-
-- **Xoay camera bằng vuốt, zoom bằng hai ngón:** trong `_gui_input` của `SubViewportContainer`, lưu các ngón theo `index`. Một ngón: `ScreenDrag.relative` đổi góc. Hai ngón: tỉ lệ khoảng cách giữa hai ngón đổi zoom. Thêm `InputEventMagnifyGesture` (trackpad Mac) và con lăn chuột cho desktop. Gọi `accept_event()`.
-- **Chạm đúp:** hai lần nhả cách nhau dưới khoảng 0,32 giây và quãng kéo dưới 12 px.
-- **Chạm một vật 3D hoặc chỉ vào nó:** `camera.unproject_position(p)` trả về toạ độ trong SubViewport; cộng vị trí toàn cục của `SubViewportContainer` (khi `stretch = true`). Kiểm tra `camera.is_position_behind(p)` trước.
-- **Lớp phủ đang mở:** cử chỉ trên khung 3D và vuốt danh sách bên dưới phải bị chặn. Lớp phủ có nền nhận chạm (`STOP`), còn bộ xử lý trong `_input()` thì cần một `guard`.
-- **Đa chạm:** chỉ theo dõi đúng `index` đã bắt đầu thao tác, bỏ qua các ngón khác.
+**Testing on desktop:** give the sheet a static variable that fakes the keyboard height (window pixels, `-1` = use the real keyboard). Tap the field with `Input.parse_input_event` (`InputEventScreenTouch`), and **only then** set the fake height, matching the order on a device: if you set it first, the sheet rises before the tap and the tap lands on empty space. Check that the sheet's bottom edge ≤ the keyboard's top edge, the field is inside the sheet, tapping the title removes focus from the field, and removing the keyboard returns the sheet to the bottom. Headless, `window_get_size()` can be 0, so the conversion needs a fallback.
 
 ---
 
-## 4. Test bằng chạm giả lập
+## 3. Other gestures
 
-`Input.parse_input_event()` đi qua đúng đường của điện thoại (sinh click giả lập rồi tới chạm), nên bắt được cả ba lỗi ở mục 2. Xem `templates/check_touch.gd`.
+- **Rotate the camera by dragging, zoom with two fingers:** in the `SubViewportContainer`'s `_gui_input`, track fingers by `index`. One finger: `ScreenDrag.relative` changes the angle. Two fingers: the ratio of the distance between them changes the zoom. Add `InputEventMagnifyGesture` (trackpad pinch, reported on macOS) and the mouse wheel for desktop. Call `accept_event()`.
+- **Double tap:** two releases less than about 0.32 s apart, with less than 12 px of movement.
+- **Tapping or pointing at a 3D object:** `camera.unproject_position(p)` returns coordinates inside the SubViewport; add the `SubViewportContainer`'s global position (when `stretch = true`). Check `camera.is_position_behind(p)` first.
+- **An overlay is open:** gestures on the 3D view and swipes on the list below must be blocked. The overlay has a background that takes touches (`STOP`), and handlers in `_input()` need a `guard`.
+- **Multi-touch:** follow only the `index` that started the gesture and ignore other fingers.
 
-- **Toạ độ:** sự kiện đưa vào là toạ độ *cửa sổ*. Rect của control là toạ độ *canvas*. Đổi bằng `get_viewport().get_final_transform() * canvas_point` (khi stretch mode là `canvas_items`). `relative` của ScreenDrag đổi bằng `basis_xform`.
-- **ScrollContainer gốc khi chạy headless:** đặt `Input.emulate_touch_from_mouse = true` (hoặc bật trong Project Settings) để nó kéo như trên điện thoại.
-- **Chờ theo thời gian thật** (`create_timer`) sau khi chạm mở bảng, vì hiệu ứng mở và khoảng bỏ qua chạm tính bằng mili giây.
+---
 
-Danh sách nên test cho mỗi màn hình có nút và danh sách:
+## 4. Testing with simulated touch
 
-- [ ] Chạm từng nút mở bảng/thẻ: sau 0,5 giây bảng vẫn mở.
-- [ ] Chạm nền mờ: bảng đóng. Chạm nút trong bảng: đúng hành động, đúng một lần.
-- [ ] Vuốt mỗi danh sách, bắt đầu **trên một nút**: danh sách cuộn (`scroll_vertical` tăng), nút không bị bấm.
-- [ ] Sau khi quán tính dừng, chạm một nút trong danh sách đã cuộn: vẫn bấm được.
-- [ ] Chạm một hàng/dòng: chọn đúng một lần (không bật rồi tắt vì sự kiện tới hai lần).
-- [ ] Kéo khung 3D: camera xoay. Có lớp phủ đang mở thì không xoay.
+`Input.parse_input_event()` goes through the same path as a phone (emulated click, then touch), so it catches all three bugs from section 2. See `templates/check_touch.gd`.
 
-Những gì test giả lập không thay được, phải thử trên máy: cảm giác cuộn và quán tính, chạm nhầm khi ngón tay to, vùng an toàn (tai thỏ, thanh home), độ trễ.
+- **Coordinates:** injected events use *window* coordinates. A control's rect is in *canvas* coordinates. Convert with `get_viewport().get_final_transform() * canvas_point` (when the stretch mode is `canvas_items`). Convert a ScreenDrag's `relative` with `basis_xform`.
+- **Built-in ScrollContainer when headless:** set `Input.emulate_touch_from_mouse = true` (or enable it in Project Settings) so it drags like on a phone.
+- **Wait by real time** (`create_timer`) after a tap that opens a sheet, because the open animation and the tap-ignore window are measured in milliseconds.
+
+Checks worth having for every screen with buttons and lists:
+
+- [ ] Tap every button that opens a sheet/card: the sheet is still open 0.5 s later.
+- [ ] Tap the backdrop: the sheet closes. Tap a button inside the sheet: the right action, exactly once.
+- [ ] Swipe every list, starting **on a button**: the list scrolls (`scroll_vertical` increases) and the button isn't pressed.
+- [ ] After the inertia stops, tap a button in the scrolled list: it still presses.
+- [ ] Tap a row: it is selected exactly once (not toggled on and off by the double event).
+- [ ] Drag the 3D view: the camera rotates. With an overlay open, it doesn't.
+
+What simulated tests can't replace, and needs a device: how scrolling and inertia feel, mis-taps from a big finger, safe areas (notch, home bar), latency.

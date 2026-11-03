@@ -1,109 +1,111 @@
-# Export game Godot lên iPhone / iPad
+# Exporting a Godot game to iPhone / iPad
 
-Đo trên Godot 4.7.2, Xcode 27, macOS Apple Silicon. Các lệnh chạy từ thư mục project.
+Measured on Godot 4.7.2, Xcode 27, macOS on Apple Silicon. Run commands from the project folder.
+
+**iOS builds need a Mac.** Signing and building go through Xcode, which only runs on macOS. On Windows or Linux, develop and test on the desktop and on Android (`android-export.md`), and do the iOS export on a Mac (your own, a borrowed one, a cloud Mac, or a macOS CI runner) with the same project.
 
 ---
 
-## 1. Cần có
+## 1. Prerequisites
 
-- Xcode, và đã đăng nhập Apple ID trong **Xcode → Settings → Accounts** (tài khoản miễn phí cũng có team cá nhân).
-- Export template đúng phiên bản Godot: `~/Library/Application Support/Godot/export_templates/<phiên bản>/ios.zip`. Thiếu thì **Editor → Manage Export Templates → Download**.
-- Project Settings: `rendering/textures/vram_compression/import_etc2_astc=true` (iOS dùng ETC2/ASTC).
-- Nên có: `application/run/max_fps=60` (màn 120 Hz làm máy nóng), `display/window/handheld/orientation`, icon app (`application/config/icon`).
+- Xcode, signed in with an Apple ID under **Xcode → Settings → Accounts** (a free account also has a personal team).
+- Export templates for the exact Godot version: `~/Library/Application Support/Godot/export_templates/<version>/ios.zip`. If missing: **Editor → Manage Export Templates → Download**.
+- Project Settings: `rendering/textures/vram_compression/import_etc2_astc=true` (iOS uses ETC2/ASTC).
+- Recommended: `application/run/max_fps=60` (120 Hz screens heat the phone), `display/window/handheld/orientation`, an app icon (`application/config/icon`).
 
 ---
 
 ## 2. "No presets found"
 
-Hộp **Project → Export** báo "No presets found" nghĩa là project **chưa có `export_presets.cfg`**, không phải thiếu template.
+When **Project → Export** says "No presets found", the project **has no `export_presets.cfg`**. It does not mean the templates are missing.
 
-- Cách 1: **Add… → iOS**, điền **App Store Team ID** và **Bundle Identifier** (ví dụ `com.<tên>.<game>`), Godot tự ghi `export_presets.cfg`.
-- Cách 2: copy `export_presets.cfg` từ một project iOS khác đã chạy được, đổi `name`, `export_path`, `application/bundle_identifier`, `application/short_version`/`version`, và bỏ các dòng `plugins/...` của plugin project này không có.
-- Nếu file được ghi trong lúc editor đang mở: **Project → Reload Current Project** để editor đọc lại.
-- Thêm `/build/` vào `.gitignore`.
+- Option 1: **Add… → iOS**, fill in **App Store Team ID** and **Bundle Identifier** (e.g. `com.<name>.<game>`); Godot writes `export_presets.cfg`.
+- Option 2: copy `export_presets.cfg` from another iOS project that works, change `name`, `export_path`, `application/bundle_identifier`, `application/short_version`/`version`, and remove the `plugins/...` lines for plugins this project doesn't have.
+- If the file was written while the editor was open: **Project → Reload Current Project** so the editor reads it again.
+- Add `/build/` to `.gitignore`.
 
-**Team ID không phải mã trong ngoặc của tên chứng chỉ.** `Apple Development: Tên (BR9J8U4PJX)` thì `BR9J8U4PJX` là mã của chứng chỉ. Team ID nằm ở trường `OU`:
+**The Team ID is not the code in parentheses in the certificate name.** In `Apple Development: Name (BR9J8U4PJX)`, `BR9J8U4PJX` identifies the certificate. The Team ID is in the `OU` field:
 
 ```sh
-security find-identity -v -p codesigning                       # có chứng chỉ "Apple Development" chưa
+security find-identity -v -p codesigning                       # is there an "Apple Development" certificate?
 security find-certificate -c "Apple Development" -p | openssl x509 -noout -subject   # ... OU=<TEAM_ID> ...
 ```
 
 ---
 
-## 3. Export và cài lên máy
+## 3. Export and install on a device
 
-**Trong editor:** cắm iPhone (đã bật **Settings → Privacy & Security → Developer Mode**), bấm biểu tượng iOS ở góc trên phải để chạy thẳng lên máy (one-click deploy), hoặc **Export Project** ra `.ipa`.
+**In the editor:** plug in the iPhone (with **Settings → Privacy & Security → Developer Mode** on), then click the iOS icon at the top right to run directly on the device (one-click deploy), or use **Export Project** to produce an `.ipa`.
 
-**Dòng lệnh** (để tự kiểm tra trước khi báo người dùng là build được):
+**From the command line** (to verify the build yourself before telling the user it works):
 
 ```sh
 mkdir -p build
 godot --headless --path . --export-debug "iOS" build/<Game>.ipa > build/export.log 2>&1
 grep -E "ARCHIVE SUCCEEDED|EXPORT SUCCEEDED|error:" build/export.log
 
-xcrun devicectl list devices                                   # lấy UDID, xem trạng thái available/unavailable
+xcrun devicectl list devices                                   # get the UDID; check available/unavailable
 xcrun devicectl device install app --device <UDID> build/<Game>.ipa
 xcrun devicectl device process launch --device <UDID> --terminate-existing <bundle.id>
-xcrun devicectl device info processes --device <UDID> | grep <Game>    # còn chạy sau vài giây = không crash lúc mở
+xcrun devicectl device info processes --device <UDID> | grep <Game>    # still running after a few seconds = no crash on launch
 ```
 
-Godot gọi `xcodebuild archive -allowProvisioningUpdates`, nên bundle ID mới được Xcode tự tạo provisioning profile (thường là "iOS Team Provisioning Profile: *").
+Godot calls `xcodebuild archive -allowProvisioningUpdates`, so Xcode creates a provisioning profile for a new bundle ID automatically (usually "iOS Team Provisioning Profile: *").
 
 ---
 
-## 4. Lỗi hay gặp
+## 4. Common errors
 
-| Lỗi | Cách xử lý |
+| Error | Fix |
 |---|---|
-| `The device is not able to fulfill the requested usage assertion requirements` (CoreDeviceError 4016) | Máy đang khoá, đã rút cáp, hoặc khác mạng: `devicectl list devices` báo `unavailable`. Mở khoá, cắm lại, chọn Trust. |
-| App cài xong không mở được, báo nhà phát triển chưa tin cậy | Trên máy: **Settings → General → VPN & Device Management**, tin cậy chứng chỉ developer. |
-| Không thấy máy trong Godot/Xcode | Bật Developer Mode (cần khởi động lại máy), cắm cáp, Trust máy Mac. |
-| Muốn chạy trên iOS Simulator | Không làm: thử trên máy thật (xem đoạn dưới bảng). Template chính thức 4.7.2 chỉ có thư viện Simulator x86_64 (dù `Info.plist` ghi cả arm64; kiểm bằng `lipo -archs`), Simulator iOS 27 trên Apple Silicon không chạy app x86_64. |
-| Export xong nhưng code mới không có trên máy | Export lại rồi cài lại; bản trên máy là bản tại lúc export. |
-| `--export-release` (hoặc hộp thoại Export, bỏ tick Export With Debug) báo `ARCHIVE FAILED`: `<Game> has conflicting provisioning settings. <Game> is automatically signed for development, but a conflicting code signing identity Apple Distribution has been manually specified`. Hộp thoại Godot chỉ ghi `Failed to run xcodebuild with code 0` | Ký tự động (Provisioning Profile để trống) mà ô **Code Sign Identity Release** để trống thì Godot ghi `Apple Distribution` vào cấu hình Release của Xcode, nên bước archive bị lỗi. Đặt `application/code_sign_identity_release="Apple Development"`. Archive ký bằng chứng chỉ development; khi export cho App Store, Xcode (`-allowProvisioningUpdates`) ký lại bằng Apple Distribution do Apple quản lý trên cloud, kể cả khi Mac chưa có chứng chỉ Distribution. Kiểm `.ipa`: `codesign -dvv Payload/*.app` phải ra `Authority=Apple Distribution`, profile `iOS Team Store Provisioning Profile`. Nếu editor đang mở thì sửa trong hộp thoại, vì editor ghi đè `export_presets.cfg`. |
-| Xcode: `While building for iOS Simulator, no library for this platform was found in .../<Plugin>.xcframework` | Đang chọn đích Simulator, mà plugin (AdMob, thông báo, IAP…) chỉ có `ios-arm64`. Chọn iPhone thật ở thanh đích của Xcode. |
-| Thư mục gốc project đầy `<Game>.xcodeproj`, `.xcframework` (vài trăm MB), `.pck`, `PrivacyInfo.xcprivacy` | `export_path` của preset bị đổi thành `./<Game>.xcodeproj`. Xoá chúng, trả đường dẫn về `build/...`. Godot còn import icon trong `Images.xcassets` và đóng gói vào `.pck`. |
-| Icon trong `build/` bị Godot import (thấy file `.import` trong `build/`) | `build/` nằm trong project nên Godot quét nó: thêm `build/.gdignore` và `build/*` vào `exclude_filter` của preset. |
-| Plugin GDExtension chỉ có iOS: mỗi lần chạy trên Mac in `No GDExtension library found for current OS and architecture (macos.arm64)` | Vô hại. Code game kiểm tra `ClassDB.class_exists("<Class>")` trước khi dùng, và tìm autoload của plugin bằng `get_node_or_null` để tool headless vẫn chạy. |
+| `The device is not able to fulfill the requested usage assertion requirements` (CoreDeviceError 4016) | The device is locked, unplugged, or on another network: `devicectl list devices` shows `unavailable`. Unlock it, plug it back in, tap Trust. |
+| The app installs but won't open, saying the developer isn't trusted | On the device: **Settings → General → VPN & Device Management**, trust the developer certificate. |
+| The device doesn't show up in Godot/Xcode | Turn on Developer Mode (requires a restart), plug in the cable, trust the Mac. |
+| You want to run on the iOS Simulator | Don't: test on a real device (see below the table). The official 4.7.2 template only ships an x86_64 Simulator library (even though `Info.plist` lists arm64 too; check with `lipo -archs`), and the iOS 27 Simulator on Apple Silicon doesn't run x86_64 apps. |
+| Exported, but the new code isn't on the device | Export again and reinstall; the device has the build from the time of export. |
+| `--export-release` (or the Export dialog with Export With Debug unchecked) fails with `ARCHIVE FAILED`: `<Game> has conflicting provisioning settings. <Game> is automatically signed for development, but a conflicting code signing identity Apple Distribution has been manually specified`. The Godot dialog only says `Failed to run xcodebuild with code 0` | With automatic signing (Provisioning Profile left empty) and **Code Sign Identity Release** left empty, Godot writes `Apple Distribution` into Xcode's Release configuration, and the archive step fails. Set `application/code_sign_identity_release="Apple Development"`. The archive is signed with the development certificate; when exporting for the App Store, Xcode (`-allowProvisioningUpdates`) re-signs it with the cloud-managed Apple Distribution certificate, even if the Mac has no Distribution certificate. Check the `.ipa`: `codesign -dvv Payload/*.app` must show `Authority=Apple Distribution` and the profile `iOS Team Store Provisioning Profile`. If the editor is open, change it in the dialog, because the editor overwrites `export_presets.cfg`. |
+| Xcode: `While building for iOS Simulator, no library for this platform was found in .../<Plugin>.xcframework` | A Simulator destination is selected, but the plugin (AdMob, notifications, IAP…) only ships `ios-arm64`. Pick a real iPhone in Xcode's destination bar. |
+| The project root fills up with `<Game>.xcodeproj`, `.xcframework` (hundreds of MB), `.pck`, `PrivacyInfo.xcprivacy` | The preset's `export_path` was changed to `./<Game>.xcodeproj`. Delete those files and set the path back to `build/...`. Godot would also import the icons in `Images.xcassets` and pack them into the `.pck`. |
+| Icons inside `build/` get imported by Godot (`.import` files appear in `build/`) | `build/` is inside the project, so Godot scans it: add `build/.gdignore` and add `build/*` to the preset's `exclude_filter`. |
+| An iOS-only GDExtension plugin prints `No GDExtension library found for current OS and architecture (macos.arm64)` on every Mac run | Harmless. Game code checks `ClassDB.class_exists("<Class>")` before using it, and finds the plugin's autoload with `get_node_or_null` so headless tools still run. |
 
-**Đừng cố chạy game Godot trên iOS Simulator:** giao diện thử trên Mac (`testing.md` §5), hiệu năng và plugin thử trên máy thật. Đã thử (22/10/2026): tự build engine arm64-simulator (`scons platform=ios target=template_debug simulator=yes arch=arm64`) thì app chạy, nhưng OpenGL ES của Simulator chạy shader trên CPU (`sample <pid>` thấy `glvmInterpretFP…`), Godot tắt Metal/Vulkan khi build Simulator, nên một cảnh 3D mất khoảng 4 phút cho khung hình đầu; ép Metal thì driver Metal của Godot không khởi tạo được trên Simulator. Chủ dự án coi đó là làm quá.
+**Don't try to run a Godot game on the iOS Simulator:** test the UI on the desktop (`testing.md` §5), and performance and plugins on a real device. What was tried (2026-10-22): a self-built arm64-simulator engine (`scons platform=ios target=template_debug simulator=yes arch=arm64`) runs, but the Simulator's OpenGL ES executes shaders on the CPU (`sample <pid>` shows `glvmInterpretFP…`), and Godot disables Metal/Vulkan in Simulator builds, so a 3D scene takes about 4 minutes for the first frame; forcing Metal makes Godot's Metal driver fail to initialize on the Simulator. The project owner considers it over-engineering.
 
-**Thử giao diện và chụp ảnh App Store:** làm trên Mac, xem `testing.md` §5.
+**UI testing and App Store screenshots:** do them on the desktop, on any OS; see `testing.md` §5.
 
-**Sửa save của app trên máy** (ví dụ xoá gói mua thử): app phải đang tắt (cài lại app cũng tắt nó), vì app lưu lại khi pause/đóng.
+**Editing an app's save on the device** (e.g. removing a test purchase): the app must not be running (reinstalling also stops it), because the app saves when paused/closed.
 
 ```sh
 xcrun devicectl device copy from --device <UDID> --domain-type appDataContainer --domain-identifier <bundle.id> --source Documents/save.json --destination save.json
-# sửa save.json, giữ một bản sao
+# edit save.json, keep a backup
 xcrun devicectl device copy to --device <UDID> --domain-type appDataContainer --domain-identifier <bundle.id> --source save.json --destination Documents/save.json
 ```
 
-`user://` trên iOS là thư mục `Documents/` của app. Đọc log `print()` của app: `xcrun devicectl device process launch --console --terminate-existing --device <UDID> <bundle.id>` (chạy nền rồi dừng sau vài chục giây).
+On iOS, `user://` is the app's `Documents/` folder. To read the app's `print()` output: `xcrun devicectl device process launch --console --terminate-existing --device <UDID> <bundle.id>` (run it in the background and stop it after a few dozen seconds).
 
-### 4.1 Hỏi quyền theo dõi quảng cáo (ATT) với AdMob: hỏi ngay lần mở đầu, nhưng đợi app active
+### 4.1 The App Tracking Transparency (ATT) prompt with AdMob: ask on the first launch, but wait until the app is active
 
-**Lỗi bị App Review từ chối:** game có AdMob mà hộp thoại App Tracking Transparency ("Allow … to track your activity…") không hiện khi mở app lần đầu. Reviewer chỉ mở app vài phút; nếu game đợi tới lúc nào đó mới hỏi (sau phần hướng dẫn, khi có quảng cáo đầu tiên…) thì reviewer không bao giờ thấy và từ chối với lý do không tìm thấy yêu cầu ATT. Chủ dự án đã bị từ chối vì đúng lỗi này với một app khác (Capacitor).
+**Rejected by App Review:** a game with AdMob doesn't show the App Tracking Transparency dialog ("Allow … to track your activity…") on first launch. The reviewer only opens the app for a few minutes; if the game waits until some later point to ask (after the tutorial, at the first ad…), the reviewer never sees it and rejects the app for not finding the ATT request. The project owner was rejected for exactly this with another app (Capacitor).
 
-**Cái bẫy thứ hai:** gọi `requestTrackingAuthorization` quá sớm, lúc app chưa ở trạng thái active (đang khởi động, ngay trong `_ready()` của màn đầu), thì iOS **lặng lẽ bỏ qua** hộp thoại: không hiện gì, trạng thái vẫn "chưa quyết định". App kia bị từ chối thêm một lần vì lỗi này, dù code đã gọi hỏi từ lúc mở.
+**The second trap:** calling `requestTrackingAuthorization` too early, while the app isn't active yet (still launching, inside the first screen's `_ready()`), makes iOS **silently drop** the dialog: nothing appears and the status stays "not determined". That other app was rejected once more because of this, even though the code asked at launch.
 
-**Cách làm đúng:**
-- Hỏi ATT (rồi mới khởi động SDK quảng cáo) ở **lần mở đầu tiên**, khi game đã hiện trên màn hình và ở phía trước được khoảng 1 giây. Việc *mời xem quảng cáo* vẫn có thể để sau phần hướng dẫn; chỉ riêng câu hỏi ATT phải đến sớm.
-- Đếm thời gian "ở phía trước" trong `_process` và đặt lại khi nhận `NOTIFICATION_APPLICATION_PAUSED` / `FOCUS_OUT`; chỉ hỏi khi đếm đủ. Lần mở sau iOS tự trả lời theo lựa chọn cũ, không hiện lại.
-- Câu mô tả quyền `NSUserTrackingUsageDescription` phải có trong Info.plist (plugin AdMob của Godot thêm qua `att_text` trong cấu hình export của nó). Thiếu câu này thì app crash khi hỏi.
-- Privacy manifest (`PrivacyInfo.xcprivacy`) của chính app: `NSPrivacyTracking = false` và **không** có khoá `NSPrivacyTrackingDomains`. Để `true` mà không có domain thì bị từ chối ITMS-91064 "Invalid tracking information". Việc tracking qua quảng cáo được khai ở App Privacy trên App Store Connect.
+**The right way:**
+- Ask for ATT (and only then start the ads SDK) on the **first launch**, once the game has been on screen and in the foreground for about 1 second. *Offering* ads can still wait until after the tutorial; only the ATT question has to come early.
+- Count "time in the foreground" in `_process` and reset it on `NOTIFICATION_APPLICATION_PAUSED` / `FOCUS_OUT`; ask only once the count is reached. On later launches iOS answers with the earlier choice and doesn't show the dialog again.
+- The permission text `NSUserTrackingUsageDescription` must be in Info.plist (Godot's AdMob plugin adds it via `att_text` in its export settings). Without it, the app crashes when asking.
+- The app's own privacy manifest (`PrivacyInfo.xcprivacy`): `NSPrivacyTracking = false` and **no** `NSPrivacyTrackingDomains` key. Setting `true` with no domains is rejected as ITMS-91064 "Invalid tracking information". Tracking through ads is declared under App Privacy in App Store Connect.
 
-**Test:** trên Mac không có ATT; thay plugin bằng một node giả có `request_tracking_authorization()` / `initialize()`. Kiểm tra: ở nền thì chưa hỏi; vừa mở chưa hỏi ngay; ở phía trước đủ thời gian thì hỏi. Trên máy thật: xoá app, cài lại, mở: hộp thoại phải hiện trong vài giây đầu, kể cả khi đang có màn chào mừng hay hướng dẫn.
+**Testing:** there's no ATT on the desktop; replace the plugin with a fake node that has `request_tracking_authorization()` / `initialize()`. Check: in the background it hasn't asked; right after opening it hasn't asked yet; after enough time in the foreground it asks. On a device: delete the app, reinstall, open it: the dialog must appear within the first few seconds, even over a welcome screen or tutorial.
 
 ---
 
-## 5. Thử trên máy thật: danh sách tối thiểu
+## 5. Minimum on-device checklist
 
-- [ ] Mở app không crash; màn đầu không bị tai thỏ / Dynamic Island / thanh home che.
-- [ ] App có quảng cáo: xoá app, cài lại, mở lần đầu thì hộp thoại ATT hiện trong vài giây đầu (§4.1).
-- [ ] Mọi danh sách vuốt được, kể cả khi bắt đầu trên nút (`touch-input.md`).
-- [ ] Chạm nút mở bảng: bảng không tự đóng; chạm nền mờ thì đóng.
-- [ ] Nút đủ to (khoảng 44 pt trở lên); không chạm nhầm khi vuốt.
-- [ ] Âm thanh, nhạc, nút tắt tiếng; thử gạt công tắc im lặng.
-- [ ] Vuốt về màn hình chính rồi mở lại: tiến độ còn. Tắt hẳn app rồi mở lại: tiến độ còn.
-- [ ] Chơi 10–15 phút: máy không nóng bất thường (Xcode → Debug Navigator: CPU, GPU, Energy).
+- [ ] The app opens without crashing; the first screen isn't covered by the notch / Dynamic Island / home bar.
+- [ ] Apps with ads: delete the app, reinstall, open it for the first time: the ATT dialog appears within the first few seconds (§4.1).
+- [ ] Every list swipes, even when the swipe starts on a button (`touch-input.md`).
+- [ ] Tapping a button that opens a sheet: the sheet doesn't close itself; tapping the backdrop closes it.
+- [ ] Buttons are big enough (about 44 pt or more); no mis-taps when swiping.
+- [ ] Sound, music, the mute button; try flipping the silent switch.
+- [ ] Swipe home and reopen: progress is kept. Force-quit and reopen: progress is kept.
+- [ ] Play for 10–15 minutes: the phone doesn't get unusually hot (Xcode → Debug Navigator: CPU, GPU, Energy).

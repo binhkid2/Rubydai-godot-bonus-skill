@@ -1,69 +1,85 @@
-# binh-godot-bonus-skill
+# Rubydai Godot bonus skill
 
-Skill cho [Claude Code](https://claude.com/claude-code), dùng cho mọi game Godot 4 chạy trên điện thoại. Skill gom lại các bài học kiểu "chạy trong editor được nhưng lên máy thật thì hỏng". Claude sẽ tự áp dụng chúng khi làm việc trong project Godot, không cần bạn nhắc.
+A [Claude Code](https://claude.com/claude-code) skill for Godot 4 games that ship to phones. It collects the "works in the editor, breaks on the device" lessons, and Claude applies them automatically whenever it works in a Godot project, without being asked.
 
-## Nội dung
+Works on macOS, Windows and Linux. iOS export needs a Mac, because Xcode only runs there.
 
-| File | Nội dung |
+The skill installs as `rubydai-godot-bonus-skill`.
+
+## Contents
+
+| File | What's in it |
 |---|---|
-| `SKILL.md` | Phần Claude đọc: khi nào dùng skill, các quy tắc luôn áp dụng, khi nào mở file tham khảo nào |
-| `references/touch-input.md` | Điện thoại gửi chạm vào Godot thế nào (click giả lập rồi mới tới chạm, `mouse_filter` mặc định của từng loại control). Ba lỗi chỉ thấy trên máy thật: danh sách không vuốt được, bảng vừa mở đã tự đóng, vuốt xong bấm nhầm. Cách sửa, cử chỉ xoay/zoom/chạm đúp, cách test bằng chạm giả lập |
-| `references/silent-bugs-checklist.md` | Lỗi ngầm của Godot 4: script/class, dựng Control bằng code (anchor/offset, `reset_size`, label tự xuống dòng, chữ dài theo dữ liệu làm bảng tràn màn hình, chữ vẽ tay đè nhau), tween/timer/coroutine (node đã xoá, `await` treo), 3D trên mobile (màu sRGB, tonemap, camera, glow, nhiệt), asset (GLB, SVG, WAV), nền tảng và lưu dữ liệu |
-| `references/ios-export.md` | Export lên iPhone/iPad: "No presets found", tìm đúng Team ID, export và cài/mở app bằng dòng lệnh (`devicectl`), các lỗi hay gặp, danh sách thử trên máy |
-| `references/testing.md` | Thứ tự kiểm tra: script nạp được, validator headless, fuzz logic, dữ liệu cực đoan cho UI, `--selftest` qua cảnh chính, chụp và xem ảnh màn hình, chạy hết nội dung qua UI, đo hiệu năng, thử trên máy |
-| `templates/touch_scroll.gd` | ScrollContainer vuốt được cả khi chạm trúng nút, có quán tính, không bấm nhầm sau khi vuốt |
-| `templates/check_touch.gd` | Bộ hàm chạm/vuốt giả lập (`tap`, `drag`, đổi toạ độ canvas sang cửa sổ) kèm ví dụ test |
-| `templates/check_extremes.gd` | Test dữ liệu cực đoan: tên dài nhất, hết mọi thứ cùng lúc, số khổng lồ, ở mọi cỡ màn hình. Kiểm bảng không tràn màn hình, chữ HUD không ra khỏi thẻ hay đè nhau, không hiện `nan`/`inf`/số tràn |
-| `templates/fuzz_logic.gd` | Người chơi ngẫu nhiên có seed, kiểm bất biến sau mỗi bước (tiền hữu hạn, kho trong giới hạn, save tải lại y nguyên...) |
+| `SKILL.md` | What Claude reads: when to use the skill, the always-on rules, and which reference to open when |
+| `references/touch-input.md` | How a phone delivers touches to Godot (an emulated click first, then the touch; the default `mouse_filter` of each control). Three bugs that only show on a device: lists that won't swipe, a sheet that closes right after opening, a swipe that ends in a mis-tap. Fixes, rotate/zoom/double-tap gestures, and testing with simulated touch |
+| `references/silent-bugs-checklist.md` | Godot 4 silent bugs: scripts/classes, Controls built in code (anchors/offsets, `reset_size`, autowrapping labels, data-driven text pushing a panel off screen, overlapping hand-drawn text), tweens/timers/coroutines (freed nodes, hanging `await`s), mobile 3D (sRGB colors, tonemapping, cameras, glow, heat), assets (GLB, SVG, WAV, path case, line endings), platform and saving |
+| `references/android-export.md` | Exporting to Android: JDK/SDK setup, the export preset, installing/launching with `adb`, reading `logcat`, release keystores and AABs for the Play Store, common errors, an on-device checklist |
+| `references/ios-export.md` | Exporting to iPhone/iPad (on a Mac): "No presets found", finding the right Team ID, exporting and installing/launching from the command line (`devicectl`), common errors, the ATT prompt for App Review, an on-device checklist |
+| `references/testing.md` | Running Godot from a terminal on each OS, then the order of checks: scripts load, headless validators, logic fuzzing, worst-case UI data, `--selftest` through the main scene, screenshots, playing all content through the UI, performance, testing on a device |
+| `templates/touch_scroll.gd` | A ScrollContainer that swipes even when the finger lands on a button, with inertia and no mis-taps after a swipe |
+| `templates/check_touch.gd` | Simulated tap/drag helpers (`tap`, `drag`, canvas → window coordinates) with example tests |
+| `templates/check_extremes.gd` | Worst-case data tests: longest names, everything out at once, huge numbers, at every screen size. Checks that panels stay on screen, HUD text stays inside its card and doesn't overlap, and no `nan`/`inf`/overflowed numbers appear |
+| `templates/fuzz_logic.gd` | A seeded random player with invariants checked after every step (finite money, stock within limits, save → load gives the same data...) |
+| `templates/store_shots.gd` | App Store screenshots taken on the desktop at iPhone 6.9" / iPad 13" sizes with a simulated notch and home bar |
+| `setup.command`, `setup.sh` | Installer for macOS (double-click `setup.command`) and Linux (`bash setup.sh`) |
+| `setup.bat`, `setup.ps1` | Installer for Windows (double-click `setup.bat`) |
 
-Các file trong `references/` viết bằng tiếng Việt và đọc được độc lập, không cần Claude. Thông tin đo trên Godot 4.7.2, Xcode 27, macOS Apple Silicon.
+The guides in `references/` stand on their own and are useful without Claude. The iOS parts were measured on Godot 4.7.2, Xcode 27, macOS on Apple Silicon.
 
-## Cài đặt trên máy mới
+## Install
 
-Skill cấp user nằm ở `~/.claude/skills/<tên-skill>/` và áp dụng cho mọi project.
+User-level skills live in `~/.claude/skills/<skill-name>/` (on Windows, `%USERPROFILE%\.claude\skills\<skill-name>\`) and apply to every project.
 
-**Cách 1: clone thẳng vào thư mục skills** (đơn giản nhất)
+### With the installer (no commands to type)
+
+1. On the repo page on GitHub, choose **Code → Download ZIP** and unzip it.
+2. Run the installer for your OS:
+   - **macOS:** right-click `setup.command` → **Open**. The first time, macOS blocks files downloaded from the internet, so use right-click rather than a double-click.
+   - **Windows:** double-click `setup.bat`. If SmartScreen says "Windows protected your PC", click **More info → Run anyway**.
+   - **Linux:** run `bash setup.sh` in a terminal from the unzipped folder.
+
+The installer:
+- checks for git. On macOS it opens the Command Line Tools installer; on Windows it installs Git with `winget`; on Linux it prints the install command for your package manager. Run the installer again once git is there.
+- clones the skill into `Desktop/Godot game projects/rubydai-godot-bonus-skill`, or pulls if it's already there;
+- links it into the skills folder. On Windows it uses a directory junction, which needs no admin rights;
+- adds the "always use this skill" line to `~/.claude/CLAUDE.md` if it's not there yet.
+
+It's safe to run again at any time; anything already in place is skipped. The list of skills and the clone folder are at the top of `setup.sh` and `setup.ps1`.
+
+### By hand
+
+Clone straight into the skills folder (macOS/Linux):
 
 ```sh
 mkdir -p ~/.claude/skills
-git clone <url-repo> ~/.claude/skills/binh-godot-bonus-skill
+git clone https://github.com/binhkid2/Rubydai-godot-bonus-skill.git ~/.claude/skills/rubydai-godot-bonus-skill
 ```
 
-Cập nhật về sau: `git -C ~/.claude/skills/binh-godot-bonus-skill pull`.
+On Windows (PowerShell):
 
-**Cách 2: clone vào chỗ khác rồi tạo symlink** (nếu muốn sửa skill ngay trong thư mục project của mình)
-
-```sh
-git clone <url-repo> "<thư-mục-của-bạn>/binh-godot-bonus-skill"
-mkdir -p ~/.claude/skills
-ln -s "<thư-mục-của-bạn>/binh-godot-bonus-skill" ~/.claude/skills/binh-godot-bonus-skill
+```powershell
+git clone https://github.com/binhkid2/Rubydai-godot-bonus-skill.git "$env:USERPROFILE\.claude\skills\rubydai-godot-bonus-skill"
 ```
 
-Mở một phiên Claude Code mới, gõ `/` và kiểm tra có `binh-godot-bonus-skill` trong danh sách skill.
+Update later with `git -C <that folder> pull`.
 
-### Muốn Claude luôn dùng skill trong project Godot
+If you'd rather keep the clone in your own projects folder and edit it there, clone it anywhere and link it into the skills folder: `ln -s "<clone>" ~/.claude/skills/rubydai-godot-bonus-skill` on macOS/Linux, or `New-Item -ItemType Junction -Path "$env:USERPROFILE\.claude\skills\rubydai-godot-bonus-skill" -Target "<clone>"` on Windows.
 
-Claude tự dùng skill khi việc đang làm khớp với phần `description` trong `SKILL.md`, nhưng không chắc lần nào cũng dùng. Muốn chắc chắn thì thêm dòng này vào `~/.claude/CLAUDE.md`:
+Start a new Claude Code session, type `/`, and check that `rubydai-godot-bonus-skill` is in the list of skills.
+
+### Making Claude always use the skill in Godot projects
+
+Claude uses the skill on its own when the task matches the `description` in `SKILL.md`, but not reliably every time. To make sure, add this line to `~/.claude/CLAUDE.md` (the installer does it for you):
 
 ```md
-- Trong mọi project Godot (có file project.godot), luôn dùng skill `binh-godot-bonus-skill`.
+- In every Godot project (one with a project.godot file), always use the `rubydai-godot-bonus-skill` skill.
 ```
 
-## Đưa lên GitHub
+## Updating the content
 
-```sh
-cd "<thư-mục>/binh-godot-bonus-skill"
-git init
-git add .
-git commit -m "init"
-git branch -M main
-git remote add origin git@github.com:<tài-khoản>/binh-godot-bonus-skill.git
-git push -u origin main
-```
-
-## Cập nhật nội dung
-
-- Sửa trực tiếp các file trong repo này, rồi commit và push.
-- Mỗi khi gặp một lỗi chỉ thấy trên máy thật: ghi triệu chứng, nguyên nhân, cách sửa và test bắt được nó vào file tham khảo tương ứng.
-- Giữ nội dung **chung chung**: không đưa tên class, đường dẫn hay tính năng riêng của một game vào đây.
-- Phần `description` trong `SKILL.md` quyết định khi nào Claude dùng skill. Giữ dưới 1024 ký tự và liệt kê rõ các tình huống cần dùng.
+- Edit the files in this repo directly, then commit and push.
+- Whenever you hit a bug that only shows on a real device, add the symptom, the cause, the fix and the test that catches it to the matching reference.
+- Keep it **generic**: no class names, paths or features specific to one game.
+- Write everything in English.
+- The `description` in `SKILL.md` decides when Claude uses the skill. Keep it under 1024 characters and list the situations it covers explicitly.
+- The skill's folder name and the `name` in `SKILL.md` must stay `rubydai-godot-bonus-skill`: lowercase letters, digits and hyphens only.

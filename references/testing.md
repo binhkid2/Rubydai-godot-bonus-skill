@@ -1,67 +1,85 @@
-# Kiểm tra game Godot trước khi đưa người dùng thử
+# Checking a Godot game before the user tries it
 
-"Chạy trong editor được" chưa phải là xong. Thứ tự kiểm tra dưới đây đi từ rẻ tới đắt; làm hết các bước hợp với thay đổi, rồi nói rõ đã kiểm gì, bằng cách nào, và còn gì phải thử trên máy thật.
+"It runs in the editor" isn't done. The checks below go from cheapest to most expensive; do every step that fits the change, then say clearly what was checked, how, and what still has to be tried on a real device.
+
+Everything here works on macOS, Windows and Linux. The commands write the Godot binary as `godot`; see §0 for what that is on each OS.
 
 ---
 
-## 1. Script nạp được
+## 0. Running Godot from a terminal
+
+Godot doesn't install a `godot` command. Find the binary once and use its full path (or an alias / a `GODOT` environment variable) in every command:
+
+| OS | Binary | Notes |
+|---|---|---|
+| macOS | `/Applications/Godot.app/Contents/MacOS/Godot` | Or wherever `Godot.app` lives. |
+| Windows | `Godot_v4.x-stable_win64_console.exe` | Use the **`_console`** build, which ships in the same zip. The plain `.exe` detaches from the terminal, so `print()` output and errors never appear and the exit code is lost. |
+| Linux | `Godot_v4.x-stable_linux.x86_64` | `chmod +x` it after unzipping. Flatpak/Steam installs need `flatpak run org.godotengine.Godot` or the Steam path. |
+
+- Check with `<binary> --version` before running anything else.
+- Shell differences: in PowerShell, quote paths with spaces and run a binary by path with `& "C:\path\Godot_..._console.exe" --headless ...`; redirect both streams with `> build\export.log 2>&1` (works in PowerShell and cmd). `grep` examples below become `Select-String` in PowerShell.
+- Write screenshots and logs to a folder inside the project (`shots/`, `build/`) instead of `/tmp`, so the same command works on every OS; keep those folders out of git and out of the import (add a `.gdignore` file).
+
+---
+
+## 1. Scripts load
 
 ```sh
-godot --headless --path . --import                      # sau khi thêm/đổi class_name, asset mới
-godot --headless --path . --quit-after 120              # chạy cảnh chính 120 frame, có autoload: bắt lỗi parse và lỗi lúc chạy
-godot --headless --path . --check-only --script res://scripts/x.gd   # soát một file; báo thiếu autoload là bình thường
+godot --headless --path . --import                      # after adding/changing a class_name or new assets
+godot --headless --path . --quit-after 120              # run the main scene for 120 frames with autoloads: catches parse and runtime errors
+godot --headless --path . --check-only --script res://scripts/x.gd   # lint one file; missing-autoload errors are expected
 ```
 
-Đọc kỹ dòng `SCRIPT ERROR` / `Parse Error`: một lỗi parse làm cả file không nạp, và mọi node dùng file đó mất hết hàm.
+Read every `SCRIPT ERROR` / `Parse Error` line carefully: one parse error stops the whole file from loading, and every node using that file loses all its functions.
 
 ---
 
-## 2. Luật thuần chạy headless
+## 2. Pure rules, run headless
 
-Tách luật chơi (di chuyển, chấm điểm, màn chơi, lời giải) ra script không dùng node, rồi viết validator dạng `extends SceneTree`:
+Move the game rules (movement, scoring, levels, solutions) into scripts that don't use nodes, then write validators as `extends SceneTree`:
 
 ```sh
 godot --headless --path . --script tools/validate_levels.gd
 ```
 
-Validator nên: kiểm mọi màn qua được, lời giải mẫu đúng, dữ liệu không trùng id, nội dung ngẫu nhiên đúng ở mọi biến thể; in số liệu (số bước tối thiểu, lời giải BFS) để phát hiện đường tắt ngoài ý muốn. Trả mã thoát khác 0 khi lỗi.
+A validator should check that every level is solvable, the reference solutions are correct, the data has no duplicate ids, and random content works in every variant; print stats (minimum moves, BFS solution) to spot unintended shortcuts. Exit with a non-zero code on failure.
 
-Chế độ `--script` **không** có autoload, nên validator không được đụng tới script dùng autoload.
+`--script` mode has **no** autoloads, so validators must not touch scripts that use autoloads.
 
-### 2a. Fuzz logic: người chơi ngẫu nhiên + bất biến
+### 2a. Logic fuzzing: a random player + invariants
 
-Test thường chỉ đi theo đường người viết nghĩ ra. Fuzz cho một "người chơi" bấm ngẫu nhiên mọi hành động (mua, bán, đổi màn/thành phố, reset, mini-game) theo thứ tự bất kỳ, với tham số xấu (id không tồn tại, số âm, số rất lớn, tên rỗng/dài/emoji/`%d`), cho đồng hồ nhảy rất xa **và lùi lại**, lưu rồi tải lại giữa chừng. Sau **mỗi** bước, kiểm các điều luôn phải đúng:
+Normal tests only follow the paths their author thought of. A fuzzer has a "player" press every action at random (buy, sell, switch level/city, reset, mini-games) in any order, with bad arguments (ids that don't exist, negative numbers, huge numbers, empty/long/emoji/`%d` names), makes the clock jump far ahead **and backwards**, and saves and reloads along the way. After **every** step it checks what must always hold:
 
-- tiền, điểm, tốc độ hữu hạn (`is_finite`), không âm, nằm trong khoảng (danh tiếng 0..100, kho ≤ sức chứa, cấp ≤ trần);
-- chỉ số đang chọn hợp lệ, không trùng (hai quán cùng một thành phố), menu không rỗng;
-- save → JSON → load ra lại y nguyên (so từng khoá, số thực so với dung sai ~1e-12 vì JSON giữ khoảng 15 chữ số; in đường dẫn khoá khác đầu tiên, ví dụ `cafes/2/stock/milk: 25 -> 0`);
-- thông báo không chứa số hỏng (regex ở `silent-bugs-checklist.md` §5).
+- money, score and rates are finite (`is_finite`), not negative, and within range (reputation 0..100, stock ≤ capacity, level ≤ cap);
+- selected indexes are valid and not duplicated (two shops in the same city), menus aren't empty;
+- save → JSON → load gives back exactly the same data (compare key by key; floats within a tolerance of ~1e-12 because JSON keeps about 15 digits; print the path of the first differing key, e.g. `cafes/2/stock/milk: 25 -> 0`);
+- messages contain no broken numbers (regex in `silent-bugs-checklist.md` §5).
 
-Seed cố định cho từng lượt (`rng.seed = seed`) để lỗi tái hiện được; báo lỗi kèm seed, số bước và hành động vừa làm. Mẫu: `templates/fuzz_logic.gd`. Khoảng 10 seed × 2500 bước là vài phút; nếu dài hơn thì chạy nền.
+Use a fixed seed per run (`rng.seed = seed`) so failures reproduce; report a failure with the seed, the step number and the last action. Template: `templates/fuzz_logic.gd`. About 10 seeds × 2500 steps takes a few minutes; run it in the background if it takes longer.
 
-### 2b. Dữ liệu cực đoan cho UI
+### 2b. Worst-case data for the UI
 
-Lỗi layout nguy hiểm nhất là lỗi không thấy với save bình thường mà chỉ thấy khi dữ liệu dài: hết mọi nguyên liệu cùng lúc, tên tự đặt dài tối đa, chuỗi đủ 12 thành phố, số tiền 1e18. Viết một tool dựng sẵn vài kịch bản (bình thường, **xấu nhất**: mọi chữ dài nhất, mọi danh sách đầy đủ, mọi thứ hết, số lớn và số âm; **max cấp**: mọi thứ ở cấp cao nhất), rồi ở từng cỡ màn hình (16:9, iPhone dài, iPhone SE, iPad dọc và ngang):
+The most dangerous layout bugs don't show with a normal save, only with long data: every ingredient out at once, custom names at maximum length, a chain spanning all 12 cities, 1e18 money. Write a tool that builds a few scenarios (normal; **worst case**: every text at its longest, every list full, everything out, huge and negative numbers; **maxed**: everything at the top level), then at each screen size (16:9, tall iPhone, iPhone SE, iPad portrait and landscape):
 
-- mở **mọi** bảng/popup/thẻ giải thích (lấy danh sách từ bảng đăng ký trong code, không gõ tay, để bảng mới tự được kiểm), kiểm panel nằm trong màn hình và mọi control con hiện ra nằm trong bề ngang panel;
-- vẽ lại HUD với cờ audit (`silent-bugs-checklist.md` §1.10) và với **từng** nhãn trạng thái có thể có (mỗi cảnh báo, mỗi tên nguyên liệu, mỗi sự kiện), kiểm chữ nằm trong thẻ và không đè nhau;
-- chơi thử một màn mini-game có chữ lấy từ dữ liệu (món tên dài trong đơn hàng);
-- quét chữ mọi Label/Button tìm `nan`, `inf`, `922337203`, `%d` chưa điền.
+- open **every** panel/popup/info card (take the list from a registry in code, not a hand-typed list, so new panels are checked automatically), and check that the panel is on screen and every visible child control fits within the panel's width;
+- redraw the HUD with the audit flag (`silent-bugs-checklist.md` §1.10) and with **every** possible status label (each warning, each ingredient name, each event), and check that text stays inside its card and doesn't overlap;
+- play one round of any mini-game that shows data-driven text (an order with a long dish name);
+- scan the text of every Label/Button for `nan`, `inf`, `922337203`, unfilled `%d`.
 
-Viết xong thì **kiểm thử ngược**: tạm đưa lại lỗi vừa sửa và xác nhận test báo đỏ; in vài dòng debug để chắc kịch bản thật sự hiện ra (ví dụ đơn hàng đúng là món tên dài), tránh test xanh mà không kiểm gì. Mẫu: `templates/check_extremes.gd`.
+Then **test the test**: temporarily put back the bug you just fixed and confirm the test goes red; print a few debug lines to be sure the scenario really appeared (e.g. the order really has the long dish name), so you don't get a green test that checks nothing. Template: `templates/check_extremes.gd`.
 
 ---
 
-## 3. Test UI qua cảnh chính (`--selftest`)
+## 3. UI tests through the main scene (`--selftest`)
 
-Test thao tác UI cần autoload (âm thanh, lưu...) và cảnh thật, nên cho script chính nhận cờ debug sau `--` và gọi file test:
+UI tests need autoloads (audio, saving...) and the real scene, so have the main script accept a debug flag after `--` and call the test file:
 
 ```gdscript
 # scripts/main.gd
 func _ready() -> void:
 	var args := Array(OS.get_cmdline_user_args())
 	if "--selftest" in args:
-		# Lỗi script trong coroutine đang được await làm nó dừng luôn và nơi chờ treo mãi: đặt giờ thoát.
+		# A script error inside an awaited coroutine stops it and the caller hangs forever: set a quit timer.
 		get_tree().create_timer(600.0).timeout.connect(func() -> void: get_tree().quit(2))
 		var failures: int = await load("res://tools/editor_test.gd").run(self)
 		failures += await load("res://tools/check_touch.gd").run(self)
@@ -70,82 +88,82 @@ func _ready() -> void:
 ```
 
 ```sh
-godot --path . -- --selftest        # in "ok"/"FAIL" từng mục, mã thoát 0 khi qua hết
+godot --path . -- --selftest        # prints "ok"/"FAIL" per check, exit code 0 when everything passes
 ```
 
-- File test là `extends RefCounted` với `static func run(app: Node) -> int`, gọi đúng các hàm mà nút bấm gọi, rồi kiểm trạng thái (dữ liệu, node đang mở, dòng đang chọn).
-- Ở chế độ test: không ghi save thật, tắt âm thanh, tăng tốc diễn hoạt.
-- Mỗi lỗi tìm được trên máy thật phải có một mục test bắt được nó (chạy code cũ thì FAIL).
-- Test cảm ứng: `templates/check_touch.gd` và `touch-input.md`.
+- A test file is `extends RefCounted` with `static func run(app: Node) -> int`; it calls the same functions the buttons call, then checks the state (data, which node is open, which row is selected).
+- In test mode: don't write the real save, mute audio, speed up animations.
+- Every bug found on a device must get a test that catches it (it FAILs on the old code).
+- Touch tests: `templates/check_touch.gd` and `touch-input.md`.
 
 ---
 
-## 4. Chụp màn hình và nhìn ảnh
+## 4. Take screenshots and look at them
 
-Cho script chính nhận cờ chụp: dựng đúng trạng thái cần xem, chờ, lưu ảnh, thoát.
+Have the main script accept a capture flag: build the exact state to look at, wait, save the image, quit.
 
 ```gdscript
 if shot_path != "":
-	await get_tree().create_timer(wait_seconds).timeout     # chờ theo giây, không theo số frame
+	await get_tree().create_timer(wait_seconds).timeout     # wait in seconds, not frames
 	get_viewport().get_texture().get_image().save_png(shot_path)
 	get_tree().quit()
 ```
 
 ```sh
-godot --path . -- --shot=/tmp/a.png --screen=game --level=3 --wait=1.2
-godot --path . --resolution 450x975 -- --shot=/tmp/tall.png     # máy dài 19,5:9
-godot --path . --resolution 600x800 -- --shot=/tmp/ipad.png     # iPad 3:4
+godot --path . -- --shot=shots/a.png --screen=game --level=3 --wait=1.2
+godot --path . --resolution 450x975 -- --shot=shots/tall.png     # tall 19.5:9 phone
+godot --path . --resolution 600x800 -- --shot=shots/ipad.png     # 3:4 iPad
 ```
 
-- Chạy **có cửa sổ** (không `--headless`): headless không vẽ gì.
-- **Chờ theo thời gian thật.** Máy Mac 120 Hz chạy frame nhanh gấp đôi, nên "chờ 100 frame" chỉ còn 0,8 giây và ảnh chụp sớm (sao chưa bật, thẻ chưa hiện).
-- Nên có cờ để dựng từng trạng thái: màn nào, nhân vật nào, nạp lời giải mẫu, chạy xong mới chụp, chụp giữa lúc chạy, mở bảng gợi ý/thẻ...
-- Mở ảnh ra nhìn sau mỗi thay đổi giao diện. Nhiều lỗi (màu nhợt, chữ ô vuông, thẻ kẹt ngoài màn hình, khu chơi quá nhỏ) chỉ thấy qua ảnh.
+- Run **windowed** (no `--headless`): headless renders nothing.
+- **Wait by real time.** A 120 Hz display runs frames twice as fast, so "wait 100 frames" is only 0.8 s and the shot comes too early (stars not lit yet, card not shown yet).
+- Have flags to build each state: which screen, which character, load the reference solution, capture after it finishes, capture mid-run, open the hint panel/card...
+- Open and look at the images after every UI change. Many bugs (pale colors, boxes instead of text, cards stuck off screen, a play area that's too small) only show in an image.
 
 ---
 
-## 5. Thử giao diện trên Mac, không dùng iOS Simulator; ảnh App Store
+## 5. UI testing on the desktop, not the iOS Simulator; App Store screenshots
 
-**Không dùng iOS Simulator cho game Godot.** Template iOS chính thức chỉ có thư viện Simulator x86_64, Simulator iOS mới trên Apple Silicon không chạy app x86_64, và plugin native (quảng cáo, mua hàng, thông báo) chỉ có bản máy thật. Tự build engine cho Simulator thì OpenGL ES ở đó chạy trên CPU: game 3D mất vài phút mỗi khung hình. Chủ dự án coi việc đó là làm quá.
+**Don't use the iOS Simulator for a Godot game.** The official iOS template only ships an x86_64 Simulator library, recent iOS Simulators on Apple Silicon don't run x86_64 apps, and native plugins (ads, purchases, notifications) are device-only. A self-built Simulator engine runs OpenGL ES on the CPU there: a 3D game takes minutes per frame. The project owner considers it over-engineering. An Android emulator does run Godot, but it adds nothing for UI work over a phone-shaped desktop window and says nothing true about performance.
 
-Chia việc thử như sau:
+Split testing like this:
 
-| Thử gì | Ở đâu |
+| What | Where |
 |---|---|
-| Giao diện, bố cục từng cỡ máy, logic game, luồng UI, ảnh App Store | Mac: nút ▶ của Godot, tool headless, tool chụp ảnh |
-| Hiệu năng, nhiệt, FPS, cảm giác chạm và vuốt, âm thanh, plugin native | iPhone/iPad thật (`ios-export.md`) |
+| UI, layout at each device size, game logic, UI flows, App Store / Play Store screenshots | Desktop (macOS, Windows or Linux): Godot's ▶ button, headless tools, capture tools |
+| Performance, heat, FPS, touch and swipe feel, sound, native plugins | Real phone/tablet (`android-export.md`, `ios-export.md`) |
 
-**Cửa sổ ▶ hình điện thoại:** đặt `display/window/size/window_width_override` và `window_height_override` theo tỉ lệ iPhone, ví dụ 440×956 (điểm của iPhone 6,9"). Kích thước viewport gốc (ví dụ 720×1280, stretch `canvas_items` + `expand`) giữ nguyên.
+**A phone-shaped ▶ window:** set `display/window/size/window_width_override` and `window_height_override` to iPhone proportions, e.g. 440×956 (the 6.9" iPhone in points). Keep the base viewport size (e.g. 720×1280, stretch `canvas_items` + `expand`) unchanged.
 
-**Vùng an toàn trên Mac:** `DisplayServer.get_display_safe_area()` trên Mac là cả màn hình, nên HUD dính sát mép trên. Cho HUD một biến tĩnh mà tool đặt được, ví dụ `static var simulated_safe := Vector2(-1, -1)` là phần trên và dưới, tính theo tỉ lệ chiều cao màn hình. Khi biến này ≥ 0 thì HUD dùng nó thay cho safe area thật.
+**Safe area on the desktop:** on a desktop OS, `DisplayServer.get_display_safe_area()` is the whole screen, so the HUD hugs the top edge. Give the HUD a static variable that tools can set, e.g. `static var simulated_safe := Vector2(-1, -1)` for the top and bottom insets as fractions of the screen height. When it's ≥ 0, the HUD uses it instead of the real safe area.
 
-**Ảnh App Store** (cỡ Apple đòi; ảnh nhỏ hơn App Store tự thu lại):
+**App Store screenshots** (the sizes Apple requires; App Store scales them down for smaller devices):
 
-| Máy | Ảnh dọc | Safe area (điểm) |
+| Device | Portrait image | Safe area (points) |
 |---|---|---|
-| iPhone 6,9" | 1320×2868 | trên 62, dưới 34, trên tổng 956 |
-| iPad 13" (chỉ khi app hỗ trợ iPad) | 2064×2752 | trên 24, dưới 20, trên tổng 1376 |
+| iPhone 6.9" | 1320×2868 | top 62, bottom 34, out of 956 |
+| iPad 13" (only if the app supports iPad) | 2064×2752 | top 24, bottom 20, out of 1376 |
 
-- Tool `extends SceneTree`, chạy **có cửa sổ**. Đặt `root.borderless = true` rồi `root.size = Vector2i(1320, 2868)`: cửa sổ có viền bị macOS cắt theo chiều cao màn hình (đo được 1924 thay vì 2868), cửa sổ không viền thì giữ đúng cỡ. Lưu `root.get_texture().get_image()`.
-- Cho các tool chụp sẵn có nhận `--device iphone|ipad` (cỡ + safe area) thay vì viết tool mới, và một script shell chạy cả bộ vào `shots/appstore/<máy>/`. Mẫu: `templates/store_shots.gd`.
-- **Trạng thái đẹp (`--showcase`)** dựng trên dữ liệu demo:
-  - nhiều tiền, đầy kho, sàn sạch, mọi món đã mở có trên menu;
-  - quán ở thành phố/màn nào thì ghi đúng tên đó;
-  - không có cảnh báo đỏ trên HUD: nếu trạng thái đông khách thật vẫn báo thiếu ghế, cho tool một cờ tắt cảnh báo thay vì sửa luật chơi;
-  - quán phụ trong chuỗi cũng phải khoẻ, kẻo hiện chấm đỏ.
-- Mở ảnh ra xem trước khi đưa người dùng. Không dùng ảnh có mục chỉ dành cho bản debug.
-
----
-
-## 6. Chạy hết nội dung qua UI thật (`--autoplay`)
-
-Nạp lời giải mẫu của mọi màn × mọi nhân vật vào UI, chạy ở tốc độ cao, kiểm kết quả. Bắt được lỗi giữa luật và phần diễn hoạt (lệnh chạy đúng luật nhưng UI kẹt, tween trên node đã xoá...). Lọc output theo `ERROR|SCRIPT` chứ không chỉ theo "FAIL".
+- An `extends SceneTree` tool, run **windowed**. Set `root.borderless = true`, then `root.size = Vector2i(1320, 2868)`: the OS clips a bordered window to the screen height (measured on macOS: 1924 instead of 2868), while a borderless window keeps the exact size. On Windows and Linux, check the saved image's size; if it's still clipped, render into a `SubViewport` of the target size and save its texture instead. Save `root.get_texture().get_image()`.
+- Have existing capture tools accept `--device iphone|ipad` (size + safe area) instead of writing new tools, plus one shell script that runs the whole set into `shots/appstore/<device>/`. Template: `templates/store_shots.gd`.
+- **A good-looking state (`--showcase`)** built on demo data:
+  - plenty of money, full stock, clean floors, every unlocked item on the menu;
+  - whatever city/level the shop is in, its name is shown correctly;
+  - no red warnings on the HUD: if a genuinely busy state still warns about missing seats, give the tool a flag that hides warnings instead of changing the game rules;
+  - secondary shops in the chain must be healthy too, or they show red dots.
+- Look at the images before handing them to the user. Don't use shots that contain debug-only items.
 
 ---
 
-## 7. Hiệu năng
+## 6. Play all content through the real UI (`--autoplay`)
 
-Chạy có cửa sổ, đọc `Performance.get_monitor()`:
+Load the reference solution of every level × every character into the UI, run at high speed, and check the results. This catches mismatches between the rules and the animation layer (a command that follows the rules but the UI gets stuck, a tween on a freed node...). Filter the output for `ERROR|SCRIPT`, not just "FAIL".
+
+---
+
+## 7. Performance
+
+Run windowed and read `Performance.get_monitor()`:
 
 ```gdscript
 print("draw calls %d, objects %d, triangles %d" % [
@@ -154,12 +172,12 @@ print("draw calls %d, objects %d, triangles %d" % [
 	Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME)])
 ```
 
-Theo dõi khi thêm đồ trang trí, nhân vật, hiệu ứng. Số trên Mac chỉ là chặn dưới; nhiệt và FPS phải đo trên máy thật.
+Watch these as you add decoration, characters and effects. Numbers on a desktop are only a lower bound; heat and FPS must be measured on a device.
 
 ---
 
-## 8. Trên máy thật
+## 8. On a real device
 
-Export và cài bằng lệnh ở `ios-export.md`. Những thứ chỉ máy thật trả lời được: cảm giác vuốt và quán tính, chạm nhầm, vùng an toàn, âm thanh qua loa và công tắc im lặng, nhiệt sau 10–15 phút, thời gian mở app.
+Export and install with the commands in `android-export.md` or `ios-export.md`. Only a device can answer: how swiping and inertia feel, mis-taps, safe areas, sound through the speaker and the silent switch, heat after 10–15 minutes, launch time.
 
-Khi báo kết quả cho người dùng, tách rõ: đã kiểm bằng test/ảnh chụp, và những gì còn chờ họ thử trên máy.
+When reporting to the user, separate clearly: what was checked by tests/screenshots, and what still waits for them to try on a device.
